@@ -9,3 +9,5 @@ edge
 test
 *.md
 .claude
+.husky
+scripts

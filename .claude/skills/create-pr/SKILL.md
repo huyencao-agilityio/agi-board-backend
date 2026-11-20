@@ -15,11 +15,13 @@ Every PR belongs to one Trello ticket. The ticket id is the card number on the b
    **URL**. If Trello is not available or the card is not found, ask the user for the name and link.
    Never invent a ticket number, name or link.
 2. **Branch.** Never open a PR from `main` or `develop`. If on one of them, create a branch from `develop`
-   (`feat/<slug>`, `fix/<slug>`, `chore/<slug>`).
+   named `<type>/<kebab-slug>` (e.g. `feat/init-structure`, `fix/board-404`); check it with
+   `sh scripts/check-branch-name.sh`. A wrongly named branch can be renamed on GitHub
+   (`gh api -X POST repos/{owner}/{repo}/branches/<old>/rename -f new_name=<new>`), which retargets its open PR.
    Check `git status`: uncommitted changes are committed first or left out on purpose; ask if unclear.
 3. **Commits carry the ticket id.** Format: `<type>(<scope>): #<id> <Imperative summary>`, e.g.
-   `feat(boards): #123 Add board route guards`. Check `git log origin/develop..HEAD`; if a commit lacks the id,
-   tell the user and offer to reword it (only on branches not yet merged).
+   `feat(boards): #123 Add board route guards`. Check with `pnpm exec commitlint --from origin/develop --to HEAD`;
+   if a commit fails, tell the user and offer to reword it (only on branches not yet merged).
 4. **Base exists.** `git ls-remote --heads origin develop`. If `develop` does not exist on the remote, stop and tell
    the user: it must be created from `main` and pushed first.
 5. **Checks.** Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e`, `pnpm db:check`.

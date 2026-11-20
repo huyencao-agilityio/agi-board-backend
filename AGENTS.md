@@ -55,10 +55,14 @@ pnpm db:seed                    # system catalogs, idempotent
 
 ## Git
 
-- Branches: `main` (releases) ← `develop` (integration) ← `feat/*`, `fix/*`, `chore/*` created from `develop`.
+- Branches: `main` (releases) ← `develop` (integration) ← `<type>/<kebab-slug>` created from `develop`,
+  e.g. `feat/init-structure`, `fix/board-404` (types as in commits, plus `hotfix`, `release`).
+  Checked by `scripts/check-branch-name.sh` on `git push` (husky) and in CI.
 - PR into `develop`, review required, CI must pass. Never merge a PR or enable auto-merge yourself.
 - Commits: Conventional Commits with the Trello ticket id (card number) first in the subject:
   `<type>(<scope>): #<id> <Imperative summary>`, e.g. `feat(boards): #123 Add board route guards`.
-  Types: `feat`, `fix`, `chore`, `refactor`, `test`, `docs`, `build`, `ci`. Ask for the ticket id if unknown; never invent one.
+  Types: `feat`, `fix`, `chore`, `refactor`, `test`, `docs`, `build`, `ci`, `perf`, `revert`; scope required, lower case.
+  Enforced by `commitlint.config.mjs` (husky `commit-msg` hook, and CI on PRs). Ask for the ticket id if unknown;
+  never invent one, and never bypass the hook with `--no-verify`.
 - PR title: the Trello ticket name, verbatim. PR body: Ticket (link) / What / Why / How tested / Screenshots / Risk
   (`.github/pull_request_template.md`).

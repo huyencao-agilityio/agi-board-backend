@@ -26,6 +26,8 @@ jobs:
       APP_ORIGIN: http://localhost:5173
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # commitlint reads every commit of the PR
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
@@ -35,6 +37,11 @@ jobs:
         run: |
           PGPASSWORD=agi psql -h localhost -U agi -d agi_board -c 'CREATE DATABASE agi_board_test' -c 'CREATE DATABASE agi_board_shadow'
       - run: pnpm install --frozen-lockfile
+      - name: Branch name and commit messages follow the conventions
+        if: github.event_name == 'pull_request'
+        run: |
+          sh scripts/check-branch-name.sh "${{ github.head_ref }}"
+          pnpm exec commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }}
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
