@@ -40,3 +40,5 @@ Every PR belongs to one Trello ticket. The ticket id is the card number on the b
    the PR are visible to the team. Then `git push -u origin <branch>` and
    `gh pr create --base develop --title "<title>" --body-file <file>`. Return the PR URL.
    Never merge the PR and never enable auto-merge: merging is done by a reviewer.
+   To change an existing PR, `gh pr edit` can fail on old `gh` versions (Projects classic error); use
+   `gh api -X PATCH repos/{owner}/{repo}/pulls/<n> -f title="..." -F body=@<file>` instead.
