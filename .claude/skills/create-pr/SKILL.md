@@ -16,8 +16,9 @@ Every PR belongs to one Trello ticket. The ticket id is the card number on the b
    Never invent a ticket number, name or link.
 2. **Branch.** Never open a PR from `main` or `develop`. If on one of them, create a branch from `develop`
    named `<type>/<kebab-slug>` (e.g. `feat/init-structure`, `fix/board-404`); check it with
-   `sh scripts/check-branch-name.sh`. A wrongly named branch can be renamed on GitHub
-   (`gh api -X POST repos/{owner}/{repo}/branches/<old>/rename -f new_name=<new>`), which retargets its open PR.
+   `sh scripts/check-branch-name.sh` before the first push. Renaming a branch that already heads an open PR
+   **closes that PR** (GitHub only retargets PRs whose base is the renamed branch); a new PR is then needed.
+   Ask the user before renaming such a branch.
    Check `git status`: uncommitted changes are committed first or left out on purpose; ask if unclear.
 3. **Commits carry the ticket id.** Format: `<type>(<scope>): #<id> <Imperative summary>`, e.g.
    `feat(boards): #123 Add board route guards`. Check with `pnpm exec commitlint --from origin/develop --to HEAD`;
