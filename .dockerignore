@@ -8,3 +8,4 @@ src/generated
 edge
 test
 *.md
+.claude
