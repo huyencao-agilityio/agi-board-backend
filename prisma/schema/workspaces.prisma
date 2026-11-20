@@ -1,0 +1,70 @@
+/// Has CHECK constraints: see the manual block in the init migration.
+model Workspace {
+  id                    String            @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  name                  String
+  closedBoardDeleteRule RuleScope         @default(workspace_admins) @map("closed_board_delete_rule")
+  outsideInviteRule     RuleScope         @default(workspace_admins) @map("outside_invite_rule")
+  archivedAt            DateTime?         @map("archived_at") @db.Timestamptz(6)
+  archivedById          String?           @map("archived_by_id") @db.Uuid
+  createdById           String            @map("created_by_id") @db.Uuid
+  createdAt             DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  auditLogEntries       AuditLogEntry[]
+  boards                Board[]
+  invites               Invite[]
+  notifications         Notification[]
+  workspaceMembers      WorkspaceMember[]
+  archivedBy            User?             @relation("WorkspaceArchivedBy", fields: [archivedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdBy             User              @relation("WorkspaceCreatedBy", fields: [createdById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([archivedById], map: "idx_workspaces_archived_by_id")
+  @@index([createdById], map: "idx_workspaces_created_by_id")
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id          String     @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  workspaceId String     @map("workspace_id") @db.Uuid
+  userId      String     @map("user_id") @db.Uuid
+  role        MemberRole @default(member)
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user        User       @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([workspaceId, userId])
+  @@index([workspaceId], map: "idx_workspace_members_admins", where: raw("(role = 'admin'::member_role)"))
+  @@index([userId], map: "idx_workspace_members_user_id")
+  @@index([workspaceId], map: "idx_workspace_members_workspace_id")
+  @@map("workspace_members")
+}
+
+/// Has CHECK constraints: see the manual block in the init migration.
+model Invite {
+  id            String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  workspaceId   String         @map("workspace_id") @db.Uuid
+  boardId       String?        @map("board_id") @db.Uuid
+  email         String
+  role          MemberRole     @default(member)
+  status        InviteStatus   @default(pending)
+  invitedById   String         @map("invited_by_id") @db.Uuid
+  lastSentAt    DateTime       @default(now()) @map("last_sent_at") @db.Timestamptz(6)
+  expiresAt     DateTime       @map("expires_at") @db.Timestamptz(6)
+  respondedAt   DateTime?      @map("responded_at") @db.Timestamptz(6)
+  respondedById String?        @map("responded_by_id") @db.Uuid
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  board         Board?         @relation(fields: [boardId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  invitedBy     User           @relation("InviteInvitedBy", fields: [invitedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  respondedBy   User?          @relation("InviteRespondedBy", fields: [respondedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  notifications Notification[]
+
+  @@unique([workspaceId, boardId, email], map: "uq_invites_pending_target", where: raw("(status = 'pending'::invite_status)"))
+  @@index([boardId], map: "idx_invites_board_id")
+  @@index([invitedById], map: "idx_invites_invited_by_id")
+  @@index([email], map: "idx_invites_pending_email", where: raw("(status = 'pending'::invite_status)"))
+  @@index([respondedById], map: "idx_invites_responded_by_id")
+  @@index([workspaceId], map: "idx_invites_workspace_id")
+  @@map("invites")
+}

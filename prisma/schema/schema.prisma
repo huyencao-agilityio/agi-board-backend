@@ -1,0 +1,15 @@
+// Models are split by area in this folder (auth, workspaces, boards, cards, system, enums).
+// Prisma cannot express CHECK constraints, expression indexes, NULLS NOT DISTINCT or
+// DEFERRABLE constraints: they live in the "manual" block of the init migration.
+// Review every new migration: Prisma may try to drop those objects.
+
+generator client {
+  provider        = "prisma-client"
+  output          = "../../src/generated/prisma"
+  previewFeatures = ["partialIndexes"]
+  moduleFormat    = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}

@@ -1,0 +1,73 @@
+/// Has CHECK constraints: see the manual block in the init migration.
+model LabelColor {
+  id        String   @id
+  name      String
+  hex       String
+  sortOrder Int      @unique @map("sort_order") @db.SmallInt
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  labels    Label[]
+
+  @@map("label_colors")
+}
+
+model BoardBackground {
+  id                 String   @id
+  name               String
+  imageObjectKey     String   @map("image_object_key")
+  thumbnailObjectKey String   @map("thumbnail_object_key")
+  sortOrder          Int      @unique @map("sort_order") @db.SmallInt
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  boards             Board[]
+
+  @@map("board_backgrounds")
+}
+
+model Notification {
+  id          String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  recipientId String           @map("recipient_id") @db.Uuid
+  actorId     String?          @map("actor_id") @db.Uuid
+  type        NotificationType
+  workspaceId String?          @map("workspace_id") @db.Uuid
+  cardId      String?          @map("card_id") @db.Uuid
+  inviteId    String?          @map("invite_id") @db.Uuid
+  data        Json             @default("{}")
+  readAt      DateTime?        @map("read_at") @db.Timestamptz(6)
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  actor       User?            @relation("NotificationActor", fields: [actorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  card        Card?            @relation(fields: [cardId], references: [id], onUpdate: NoAction)
+  invite      Invite?          @relation(fields: [inviteId], references: [id], onUpdate: NoAction)
+  recipient   User             @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  workspace   Workspace?       @relation(fields: [workspaceId], references: [id], onUpdate: NoAction)
+
+  @@index([actorId], map: "idx_notifications_actor_id")
+  @@index([cardId], map: "idx_notifications_card_id")
+  @@index([inviteId], map: "idx_notifications_invite_id")
+  @@index([recipientId, createdAt(sort: Desc)], map: "idx_notifications_recipient_recent")
+  @@index([recipientId], map: "idx_notifications_recipient_unread", where: raw("(read_at IS NULL)"))
+  @@index([workspaceId], map: "idx_notifications_workspace_id")
+  @@map("notifications")
+}
+
+model AuditLogEntry {
+  id          String      @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  workspaceId String?     @map("workspace_id") @db.Uuid
+  actorId     String      @map("actor_id") @db.Uuid
+  actorName   String      @map("actor_name")
+  action      AuditAction
+  targetType  String      @map("target_type")
+  targetId    String?     @map("target_id") @db.Uuid
+  targetLabel String      @map("target_label")
+  data        Json        @default("{}")
+  createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  actor       User        @relation(fields: [actorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  workspace   Workspace?  @relation(fields: [workspaceId], references: [id], onUpdate: NoAction)
+
+  @@index([actorId], map: "idx_audit_log_entries_actor_id")
+  @@index([workspaceId, action, createdAt(sort: Desc)], map: "idx_audit_log_entries_workspace_action")
+  @@index([workspaceId, createdAt(sort: Desc), id(sort: Desc)], map: "idx_audit_log_entries_workspace_id")
+  @@map("audit_log_entries")
+}
