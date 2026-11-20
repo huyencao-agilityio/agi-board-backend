@@ -11,3 +11,6 @@ generated/
 .vscode/*
 !.vscode/extensions.json
 .claude/settings.local.json
+
+# pull-ticket working notes
+tasks/
