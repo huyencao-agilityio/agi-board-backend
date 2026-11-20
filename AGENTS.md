@@ -55,6 +55,7 @@ pnpm db:seed                    # system catalogs, idempotent
 
 ## Git
 
-- Work on a branch, PR into `main`, review required, CI must pass.
+- Branches: `main` (releases) ← `develop` (integration) ← `feat/*`, `fix/*`, `chore/*` created from `develop`.
+- PR into `develop`, review required, CI must pass. Never merge a PR or enable auto-merge yourself.
 - Conventional Commits: `feat`, `fix`, `chore`, `refactor`, `test`, `docs`, `build`, `ci` (optional scope, e.g. `feat(boards): ...`).
 - PR body: What / Why / How tested / Screenshots / Risk (`.github/pull_request_template.md`).

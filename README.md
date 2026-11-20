@@ -82,6 +82,7 @@ edge/                       Cloudflare gateway Worker + Durable Object (planned,
 
 ## Contributing
 
-- Branch from `main`, open a PR; review is required and CI must pass.
+- Branch from `develop` (`feat/*`, `fix/*`, `chore/*`) and open a PR into `develop`; review is required and CI must pass.
+  `develop` is merged into `main` for releases.
 - Commits follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `chore:`, ...).
 - PR description uses the template: What / Why / How tested / Screenshots / Risk.
