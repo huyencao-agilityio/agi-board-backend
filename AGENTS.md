@@ -57,5 +57,8 @@ pnpm db:seed                    # system catalogs, idempotent
 
 - Branches: `main` (releases) ← `develop` (integration) ← `feat/*`, `fix/*`, `chore/*` created from `develop`.
 - PR into `develop`, review required, CI must pass. Never merge a PR or enable auto-merge yourself.
-- Conventional Commits: `feat`, `fix`, `chore`, `refactor`, `test`, `docs`, `build`, `ci` (optional scope, e.g. `feat(boards): ...`).
-- PR body: What / Why / How tested / Screenshots / Risk (`.github/pull_request_template.md`).
+- Commits: Conventional Commits with the Trello ticket id (card number) first in the subject:
+  `<type>(<scope>): #<id> <Imperative summary>`, e.g. `feat(boards): #123 Add board route guards`.
+  Types: `feat`, `fix`, `chore`, `refactor`, `test`, `docs`, `build`, `ci`. Ask for the ticket id if unknown; never invent one.
+- PR title: the Trello ticket name, verbatim. PR body: Ticket (link) / What / Why / How tested / Screenshots / Risk
+  (`.github/pull_request_template.md`).
