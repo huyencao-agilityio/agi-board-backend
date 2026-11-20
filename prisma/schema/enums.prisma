@@ -1,0 +1,144 @@
+enum ActivityType {
+  card_created
+  card_copied
+  card_title_changed
+  card_description_changed
+  card_moved
+  card_completed
+  card_reopened
+  card_archived
+  card_restored
+  card_member_added
+  card_member_removed
+  card_label_added
+  card_label_removed
+  card_due_date_set
+  card_dates_changed
+  card_dates_removed
+  card_cover_changed
+  comment_deleted
+  attachment_added
+  attachment_removed
+  checklist_added
+  checklist_renamed
+  checklist_removed
+  checklist_item_added
+  checklist_item_checked
+  checklist_item_unchecked
+  checklist_item_removed
+  link_added
+  link_removed
+  board_created
+  board_renamed
+  board_visibility_changed
+  board_background_changed
+  board_closed
+  board_reopened
+  list_created
+  list_renamed
+  list_moved
+  list_archived
+  list_restored
+
+  @@map("activity_type")
+}
+
+enum AuditAction {
+  workspace_created
+  role_change
+  removal
+  deactivation
+  reactivation
+  archive
+  restore
+  visibility_change
+  invite
+  board_copy
+  card_move
+  card_copy
+  list_move
+  permanent_deletion
+  system_role_change
+  sign_out_all_sessions
+  resend_verification_code
+  send_password_reset_link
+
+  @@map("audit_action")
+}
+
+enum AuthThrottleScope {
+  sign_in
+  change_password
+  reset_email
+
+  @@map("auth_throttle_scope")
+}
+
+enum BoardVisibility {
+  private
+  workspace
+
+  @@map("board_visibility")
+}
+
+enum CardLinkType {
+  blocks
+  relates_to
+
+  @@map("card_link_type")
+}
+
+enum InviteStatus {
+  pending
+  accepted
+  declined
+  revoked
+
+  @@map("invite_status")
+}
+
+enum MemberRole {
+  admin
+  member
+
+  @@map("member_role")
+}
+
+enum NotificationType {
+  mention
+  comment
+  added_to_card
+  invite
+  card_moved
+  card_completed
+  blocker_completed
+  system_role_changed
+  due_reminder
+
+  @@map("notification_type")
+}
+
+enum RuleScope {
+  workspace_admins
+  board_admins
+
+  @@map("rule_scope")
+}
+
+enum SessionEndReason {
+  logout
+  signed_out_by_user
+  signed_out_by_admin
+  password_reset
+  password_changed
+
+  @@map("session_end_reason")
+}
+
+enum SystemRole {
+  user
+  support
+  super_admin
+
+  @@map("system_role")
+}

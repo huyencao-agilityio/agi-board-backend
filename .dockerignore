@@ -1,0 +1,13 @@
+node_modules
+dist
+coverage
+src/generated
+.env
+.env.*
+.git
+edge
+test
+*.md
+.claude
+.husky
+scripts
