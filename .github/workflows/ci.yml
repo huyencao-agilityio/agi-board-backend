@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: agi
+          POSTGRES_PASSWORD: agi
+          POSTGRES_DB: agi_board
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U agi -d agi_board"
+          --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      DATABASE_URL: postgresql://agi:agi@localhost:5432/agi_board
+      SHADOW_DATABASE_URL: postgresql://agi:agi@localhost:5432/agi_board_shadow
+      TEST_DATABASE_URL: postgresql://agi:agi@localhost:5432/agi_board_test
+      APP_ORIGIN: http://localhost:5173
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: Create extra databases
+        run: |
+          PGPASSWORD=agi psql -h localhost -U agi -d agi_board -c 'CREATE DATABASE agi_board_test' -c 'CREATE DATABASE agi_board_shadow'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm test:e2e
+      - name: Migrations match the Prisma schema
+        run: pnpm db:check
+      - name: Migrations and seed apply to an empty database
+        run: pnpm db:migrate && pnpm db:seed
+      - name: Docker image builds
+        run: docker build -t agi-board-backend:ci .
