@@ -34,7 +34,7 @@ Source: proposal §7 (Security NFR), risk R-02, and the guards already in `src/c
 
 - Secrets come from `ConfigService` (validated in `envSchema`); never hard-code them, never commit `.env`, never log them.
 - Tokens and codes (session, password reset, email verification, invites): generate with `randomBytes(32)` (6-digit codes with `randomInt`), store only a SHA-256 hash, compare with `timingSafeEqual`, give them an expiry and single use (`usedAt` / `voidedAt`).
-- Passwords: hash with argon2id (decided for Sprint 1; do not use bcrypt/SHA). Use a WebAssembly build: the native `argon2` package cannot load on Workers. Pick parameters that fit the Worker CPU limit and measure them. Never log or return a password or hash.
+- Passwords: argon2id was decided for Sprint 1, but pure-JS argon2id takes ~290 ms and the Workers free plan allows ~10 ms CPU per request, so `PasswordService` uses PBKDF2-SHA256 (WebCrypto) with `PASSWORD_PBKDF2_ITERATIONS` (default 10 000; OWASP says 600 000). This is a knowing exception accepted by the project owner for the free plan (specs/4/research.md R1). On a paid plan, move to argon2id and raise the cost; the hash string carries the algorithm so old hashes still verify. Do not use bcrypt/plain SHA. Never log or return a password or hash.
 
 ## Account privacy and abuse
 
