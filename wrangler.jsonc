@@ -1,6 +1,6 @@
 // Cloudflare Worker running the NestJS API. Top level = local dev (`pnpm start:dev`, e2e tests);
 // `env.staging` (deployed from develop) and `env.production` (from main) by .github/workflows/deploy.yml.
-// Bindings are not inherited by envs, so each env repeats them. Create the resources once: see README "Deploy".
+// Bindings and "define" are not inherited by envs, so each env repeats them. Create the resources once: see README "Deploy".
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "agi-board-backend",
@@ -36,6 +36,7 @@
         },
       ],
       "r2_buckets": [{ "binding": "IMAGES", "bucket_name": "agi-board-images-staging" }],
+      "define": { "import.meta.url": "\"file:///worker.js\"" },
       "vars": { "NODE_ENV": "production", "LOG_LEVEL": "info", "APP_ORIGIN": "https://staging.agi-board.workers.dev" },
     },
     "production": {
@@ -48,6 +49,7 @@
         },
       ],
       "r2_buckets": [{ "binding": "IMAGES", "bucket_name": "agi-board-images-production" }],
+      "define": { "import.meta.url": "\"file:///worker.js\"" },
       "vars": { "NODE_ENV": "production", "LOG_LEVEL": "info", "APP_ORIGIN": "https://app.agi-board.workers.dev" },
     },
   },
