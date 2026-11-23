@@ -3,31 +3,42 @@ import { LOCK_MINUTES, MAX_FAILURES, SignInThrottleService } from './sign-in-thr
 
 interface Row {
   id: string;
-  scope: string;
   subjectKey: string;
   failedCount: number;
   lockedUntil: Date | null;
 }
+type Where = { id?: string; lockedUntil?: null | { lte: Date }; subjectKey?: string };
 
-/** In-memory stand-in for the few auth_throttles calls the service makes. */
+/** In-memory stand-in for the few auth_throttles calls the service makes. Each call is atomic, like one SQL statement. */
 function fakePrisma() {
   const rows = new Map<string, Row>();
-  const at = (key: { subjectKey: string }) => rows.get(key.subjectKey);
+  const byId = (id: string) => [...rows.values()].find((r) => r.id === id);
   const authThrottle = {
     findUnique: ({ where }: { where: { scope_subjectKey: { subjectKey: string } } }) =>
-      Promise.resolve(at(where.scope_subjectKey) ?? null),
-    upsert: ({ where, create }: { where: { scope_subjectKey: { subjectKey: string } }; create: Row }) => {
-      const row = at(where.scope_subjectKey);
+      Promise.resolve(rows.get(where.scope_subjectKey.subjectKey) ?? null),
+    upsert: ({
+      where,
+      create,
+    }: {
+      where: { scope_subjectKey: { subjectKey: string } };
+      create: { failedCount: number };
+    }) => {
+      const key = where.scope_subjectKey.subjectKey;
+      const row = rows.get(key);
       if (row) row.failedCount += 1;
-      else rows.set(where.scope_subjectKey.subjectKey, { ...create, id: create.subjectKey, lockedUntil: null });
-      return Promise.resolve(at(where.scope_subjectKey));
+      else rows.set(key, { id: key, subjectKey: key, failedCount: create.failedCount, lockedUntil: null });
+      return Promise.resolve({ ...rows.get(key)! });
     },
-    update: ({ where, data }: { where: { id: string }; data: Partial<Row> }) => {
-      Object.assign(rows.get(where.id)!, data);
-      return Promise.resolve(rows.get(where.id));
+    updateMany: ({ where, data }: { where: Where; data: Partial<Row> }) => {
+      const row = where.id ? byId(where.id) : undefined;
+      const lock = where.lockedUntil;
+      const matches =
+        !!row && (lock === null ? row.lockedUntil === null : !!row.lockedUntil && row.lockedUntil <= lock!.lte);
+      if (matches) Object.assign(row, data);
+      return Promise.resolve({ count: matches ? 1 : 0 });
     },
-    deleteMany: ({ where }: { where: { subjectKey: string } }) => {
-      rows.delete(where.subjectKey);
+    deleteMany: ({ where }: { where: Where }) => {
+      rows.delete(where.subjectKey!);
       return Promise.resolve({ count: 1 });
     },
   };
@@ -37,49 +48,53 @@ function fakePrisma() {
 describe('SignInThrottleService', () => {
   const now = new Date('2026-11-23T10:00:00Z');
   const later = (minutes: number) => new Date(now.getTime() + minutes * 60_000);
+  const email = 'a@e2e.test';
   let service: SignInThrottleService;
 
   beforeEach(() => {
     service = new SignInThrottleService(fakePrisma().prisma);
   });
 
-  const fail = async (times: number, email = 'a@e2e.test') => {
-    for (let i = 0; i < times; i++) await service.recordFailure(email, now);
+  /** One wrong sign-in: counted first, then recorded as a failure when it was allowed. */
+  const wrongAttempt = async (at = now, who = email) => {
+    const allowed = await service.attempt(who, at);
+    if (allowed) await service.recordFailure(who, at);
+    return allowed;
   };
 
-  it('does not lock before the 5th failure', async () => {
-    await fail(MAX_FAILURES - 1);
-    expect(await service.isLocked('a@e2e.test', now)).toBe(false);
+  it('allows 5 wrong attempts, then refuses the 6th without counting it as an attempt to verify', async () => {
+    for (let i = 0; i < MAX_FAILURES; i++) expect(await wrongAttempt()).toBe(true);
+    expect(await wrongAttempt()).toBe(false);
   });
 
-  it('locks on the 5th failure for 15 minutes, then unlocks', async () => {
-    await fail(MAX_FAILURES);
-    expect(await service.isLocked('a@e2e.test', later(LOCK_MINUTES - 1))).toBe(true);
-    expect(await service.isLocked('a@e2e.test', later(LOCK_MINUTES))).toBe(false);
+  it('stays locked for 15 minutes, then lets one attempt through and starts counting again', async () => {
+    for (let i = 0; i < MAX_FAILURES; i++) await wrongAttempt();
+    expect(await service.attempt(email, later(LOCK_MINUTES - 1))).toBe(false);
+    expect(await wrongAttempt(later(LOCK_MINUTES))).toBe(true);
+    // That was attempt 1 of a new window, so 4 more are allowed.
+    for (let i = 0; i < MAX_FAILURES - 1; i++) expect(await wrongAttempt(later(LOCK_MINUTES))).toBe(true);
+    expect(await wrongAttempt(later(LOCK_MINUTES))).toBe(false);
   });
 
-  it('starts counting again from 1 after a lock ran out', async () => {
-    await fail(MAX_FAILURES);
-    await service.isLocked('a@e2e.test', later(LOCK_MINUTES));
-    await fail(MAX_FAILURES - 1);
-    expect(await service.isLocked('a@e2e.test', now)).toBe(false);
+  it('lets only MAX_FAILURES of many parallel attempts through', async () => {
+    const results = await Promise.all(Array.from({ length: 20 }, () => service.attempt(email, now)));
+    expect(results.filter(Boolean)).toHaveLength(MAX_FAILURES);
   });
 
-  it('keeps the count at the limit when more failures arrive', async () => {
-    const { prisma, rows } = fakePrisma();
-    service = new SignInThrottleService(prisma);
-    await fail(MAX_FAILURES + 2);
-    expect([...rows.values()][0].failedCount).toBe(MAX_FAILURES);
+  it('lets exactly one parallel attempt through when a lock has just run out', async () => {
+    for (let i = 0; i < MAX_FAILURES; i++) await wrongAttempt();
+    const results = await Promise.all(Array.from({ length: 10 }, () => service.attempt(email, later(LOCK_MINUTES))));
+    expect(results.filter(Boolean)).toHaveLength(1);
   });
 
-  it('reset lifts the lock', async () => {
-    await fail(MAX_FAILURES);
-    await service.reset('a@e2e.test');
-    expect(await service.isLocked('a@e2e.test', now)).toBe(false);
+  it('reset clears the count and the lock', async () => {
+    for (let i = 0; i < MAX_FAILURES; i++) await wrongAttempt();
+    await service.reset(email);
+    expect(await service.attempt(email, now)).toBe(true);
   });
 
   it('uses the same key for any letter case of an email', async () => {
-    await fail(MAX_FAILURES, 'A@E2E.test');
-    expect(await service.isLocked('a@e2e.TEST', now)).toBe(true);
+    for (let i = 0; i < MAX_FAILURES; i++) await wrongAttempt(now, 'A@E2E.test');
+    expect(await service.attempt('a@e2e.TEST', now)).toBe(false);
   });
 });

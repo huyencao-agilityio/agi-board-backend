@@ -98,3 +98,20 @@ test/auth.e2e-spec.ts
 - `spec.md` stays a verbatim copy of the card. The card has no rule for idle expiry, Google + deactivated, or the 7-day value; these are recorded here as `(proposed)`. Consider adding a Trello comment on card #4 listing them, so the reviewer and the frontend see the same rules. Not done automatically: writing to Trello is outward-facing.
 - Decided after analysis: every session end except `logout` (including `signed_out_by_user`) yields `SESSION_ENDED` and the "You were signed out" notice. `GOOGLE_*` variables are optional outside production and required in production. OAuth `code`/`state` are redacted from request logs (T016). The reset-password ticket must call `SignInThrottleService.reset(email)` (spec US1 criterion 7). `auth_throttles` rows for unknown emails are never cleaned up (accepted, commented in code).
 - The frontend must handle `?error=google_failed`, `?error=account_deactivated` and the `SESSION_ENDED` code on 401.
+
+## Review findings (code-reviewer and security-auditor, 2026-11-23)
+
+Fixed in the follow-up commit:
+
+- **Lockout bypass with parallel requests**: attempts are now counted before the password is checked, with one atomic increment (`SignInThrottleService.attempt`), so at most 5 of any number of parallel guesses are verified. Covered by a unit test and an e2e test with 20 parallel requests.
+- **Google link to an unverified password account (pre-hijack)**: linking now drops the password and ends the open sessions of an account whose email was never verified. A verified account keeps its password.
+- A correct password clears the failure count even for a deactivated account; the Google callback no longer logs database error messages (only the error class); the log redaction is case-insensitive; `SESSION_IDLE_DAYS` is capped at 30.
+
+Accepted, not changed:
+
+- Lockout is per email only (no per-IP limit), so anyone can lock a known email for 15 minutes; a Cloudflare rate-limit rule on `/auth/sign-in` would cover this.
+- `auth_throttles` rows are never cleaned up (see the `shortcut:` comment).
+- A deactivated account confirms a correct password with 403 (per the card).
+- No absolute session lifetime: a session used at least once per 7 days never expires.
+
+To check on staging: whether Cloudflare Workers Logs (`observability.enabled`) records the callback URL with `code` and `state` outside pino.

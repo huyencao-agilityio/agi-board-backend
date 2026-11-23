@@ -14,6 +14,7 @@ describe('validateEnv', () => {
     expect(validateEnv(valid).SESSION_IDLE_DAYS).toBe(7);
     expect(validateEnv({ ...valid, SESSION_IDLE_DAYS: '3' }).SESSION_IDLE_DAYS).toBe(3);
     expect(() => validateEnv({ ...valid, SESSION_IDLE_DAYS: '0' })).toThrow(/SESSION_IDLE_DAYS/);
+    expect(() => validateEnv({ ...valid, SESSION_IDLE_DAYS: '31' })).toThrow(/SESSION_IDLE_DAYS/);
   });
 
   it('does not require Google variables outside production', () => {

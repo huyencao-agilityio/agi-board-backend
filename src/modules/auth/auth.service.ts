@@ -35,7 +35,8 @@ export class AuthService {
   ) {}
 
   async signIn(dto: SignInDto, req: Request, res: Response): Promise<SignInResult> {
-    if (await this.throttle.isLocked(dto.email)) {
+    // Counts the attempt first (atomic), so parallel guesses cannot all be verified.
+    if (!(await this.throttle.attempt(dto.email))) {
       throw new HttpException({ code: 'SIGN_IN_LOCKED', message: 'Too many attempts. Try again in 15 minutes.' }, 429);
     }
 
@@ -60,14 +61,14 @@ export class AuthService {
       await this.throttle.recordFailure(dto.email);
       throw new UnauthorizedException({ code: 'INVALID_CREDENTIALS', message: 'Email or password is incorrect.' });
     }
+    // A correct password clears the count, including for a deactivated account (the guess is no longer a failure).
+    await this.throttle.reset(dto.email);
     if (user.deactivatedAt) {
       throw new ForbiddenException({
         code: 'ACCOUNT_DEACTIVATED',
         message: 'This account has been deactivated. Contact your administrator.',
       });
     }
-
-    await this.throttle.reset(dto.email);
     return this.createSession(user, req, res);
   }
 
@@ -100,9 +101,22 @@ export class AuthService {
         select,
       });
     } else if (!user.googleSubject) {
+      // Pre-hijack guard: an account whose email was never verified may have been registered by someone else, so
+      // linking drops its password and ends its sessions; only the Google owner of the email keeps access.
+      const unverified = !user.emailVerifiedAt;
+      if (unverified) {
+        await this.prisma.userSession.updateMany({
+          where: { userId: user.id, endedAt: null },
+          data: { endedAt: new Date(), endReason: 'password_reset' },
+        });
+      }
       user = await this.prisma.user.update({
         where: { id: user.id },
-        data: { googleSubject: profile.sub, emailVerifiedAt: user.emailVerifiedAt ?? new Date() },
+        data: {
+          googleSubject: profile.sub,
+          emailVerifiedAt: user.emailVerifiedAt ?? new Date(),
+          ...(unverified ? { passwordHash: null } : {}),
+        },
         select,
       });
     } else if (user.googleSubject !== profile.sub) {

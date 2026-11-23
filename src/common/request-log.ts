@@ -16,7 +16,8 @@ export interface LoggedRequest {
  */
 export function serializeRequest(req: IncomingMessage): LoggedRequest {
   const out = stdSerializers.req(req) as unknown as LoggedRequest;
-  if (out.url?.startsWith(OAUTH_CALLBACK)) {
+  // Express routes are case-insensitive, so match the same way.
+  if (out.url?.toLowerCase().startsWith(OAUTH_CALLBACK)) {
     out.url = `${OAUTH_CALLBACK}?redacted`;
     out.query = {};
   }

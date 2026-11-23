@@ -16,6 +16,11 @@ describe('serializeRequest', () => {
     expect(logged).toContain('/api/v1/auth/google/callback?redacted');
   });
 
+  it('redacts a differently cased callback path too (Express routes are case-insensitive)', () => {
+    const logged = JSON.stringify(serializeRequest(req('/api/v1/auth/Google/Callback?code=SECRET-CODE')));
+    expect(logged).not.toContain('SECRET-CODE');
+  });
+
   it('leaves other requests untouched', () => {
     const out = serializeRequest(req('/api/v1/health?x=1', { x: '1' }));
     expect(out.url).toBe('/api/v1/health?x=1');

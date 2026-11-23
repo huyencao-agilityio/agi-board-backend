@@ -106,6 +106,13 @@ describe('Auth sign-in (e2e)', () => {
       expect(wrong.body.error.code).toBe('INVALID_CREDENTIALS');
     });
 
+    it('does not keep counting failures once the correct password was given, even for a deactivated account', async () => {
+      await makeUser('off2@auth.e2e.test', { deactivatedAt: new Date() });
+      for (let i = 0; i < 3; i++) await signIn({ email: 'off2@auth.e2e.test', password: 'wrong password' }).expect(401);
+      await signIn({ email: 'off2@auth.e2e.test', password }).expect(403);
+      expect(await prisma.authThrottle.count()).toBe(0);
+    });
+
     it('locks after 5 wrong passwords, also for an unknown email, without counting the locked attempt', async () => {
       await makeUser('lock@auth.e2e.test');
       for (const email of ['lock@auth.e2e.test', 'ghost@auth.e2e.test']) {
@@ -115,7 +122,7 @@ describe('Auth sign-in (e2e)', () => {
       }
       const rows = await prisma.authThrottle.findMany({ where: { scope: 'sign_in' } });
       expect(rows).toHaveLength(2);
-      for (const row of rows) expect(row.failedCount).toBe(5);
+      for (const row of rows) expect(row.lockedUntil).not.toBeNull();
     });
 
     it('rejects the correct password while locked', async () => {
@@ -125,16 +132,17 @@ describe('Auth sign-in (e2e)', () => {
       expect(res.body.error.code).toBe('SIGN_IN_LOCKED');
     });
 
-    it('locks when the wrong attempts arrive in parallel', async () => {
+    it('verifies at most 5 passwords when many wrong attempts arrive at once', async () => {
       await makeUser('race@auth.e2e.test');
-      await Promise.all(
-        Array.from({ length: 5 }, () => signIn({ email: 'race@auth.e2e.test', password: 'wrong password' })),
+      const results = await Promise.all(
+        Array.from({ length: 20 }, (_, i) => signIn({ email: 'race@auth.e2e.test', password: `wrong password ${i}` })),
       );
+      const statuses = results.map((r) => r.status);
+      expect(statuses.filter((s) => s === 401)).toHaveLength(5);
+      expect(statuses.filter((s) => s === 429)).toHaveLength(15);
       const res = await signIn({ email: 'race@auth.e2e.test', password }).expect(429);
       expect(res.body.error.code).toBe('SIGN_IN_LOCKED');
-      const rows = await prisma.authThrottle.findMany({ where: { scope: 'sign_in' } });
-      expect(rows).toHaveLength(1);
-      expect(rows[0].failedCount).toBe(5);
+      expect(await prisma.authThrottle.count()).toBe(1);
     });
 
     it('clears the failure count after a successful sign-in', async () => {
@@ -284,15 +292,29 @@ describe('Auth sign-in (e2e)', () => {
       expect(await prisma.userSession.count({ where: { userId: user.id } })).toBe(1);
     });
 
-    it('merges into an existing password account with the same email, silently', async () => {
-      const existing = await makeUser('g@auth.e2e.test', { emailVerifiedAt: null });
+    it('merges into a verified password account with the same email, silently, and keeps its password', async () => {
+      const existing = await makeUser('g@auth.e2e.test');
       const res = await callback({ code: 'c' });
       expect(res.headers.location).toBe(`${origin}/home`);
       expect(await prisma.user.count({ where: { email: 'g@auth.e2e.test' } })).toBe(1);
       const merged = await prisma.user.findUniqueOrThrow({ where: { id: existing.id } });
       expect(merged.googleSubject).toBe('google-e2e-sub');
       expect(merged.passwordHash).toBe(passwordHash);
+    });
+
+    it('drops the password and ends the sessions of an unverified account when Google links to it', async () => {
+      // Someone may have registered this email without proving they own it; only the Google owner keeps access.
+      const existing = await makeUser('g@auth.e2e.test', { emailVerifiedAt: null });
+      await signIn({ email: 'g@auth.e2e.test', password }).expect(200);
+      const res = await callback({ code: 'c' });
+      expect(res.headers.location).toBe(`${origin}/home`);
+      const merged = await prisma.user.findUniqueOrThrow({ where: { id: existing.id } });
+      expect(merged).toMatchObject({ googleSubject: 'google-e2e-sub', passwordHash: null });
       expect(merged.emailVerifiedAt).not.toBeNull();
+      const sessions = await prisma.userSession.findMany({ where: { userId: existing.id } });
+      expect(sessions.filter((s) => s.endedAt === null)).toHaveLength(1); // only the new Google session
+      expect(sessions.filter((s) => s.endReason === 'password_reset')).toHaveLength(1);
+      await signIn({ email: 'g@auth.e2e.test', password }).expect(401);
     });
 
     it('accepts an account of any email domain', async () => {

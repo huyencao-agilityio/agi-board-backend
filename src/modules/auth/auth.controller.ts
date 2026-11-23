@@ -75,14 +75,22 @@ export class AuthController {
     // The user closed the window or declined: back to the sign-in screen as it was, with no message.
     if (error === 'access_denied') return this.redirect(res, '/sign-in');
 
+    let profile;
     try {
-      const profile = await this.google.authenticate(code, state, cookie);
+      profile = await this.google.authenticate(code, state, cookie);
+    } catch (err) {
+      // Our own messages ("State mismatch", "Bad audience", ...): they never hold the code, the token or the profile.
+      this.logger.warn(`Google sign-in failed: ${err instanceof Error ? err.message : 'unknown error'}`);
+      return this.redirect(res, '/sign-in?error=google_failed');
+    }
+
+    try {
       const result = await this.auth.signInWithGoogle(profile, req, res);
       return this.redirect(res, result.next === 'home' ? '/home' : '/verify-email');
     } catch (err) {
       if (err instanceof ForbiddenException) return this.redirect(res, '/sign-in?error=account_deactivated');
-      // Message only: it never holds the code, the token or the profile.
-      this.logger.warn(`Google sign-in failed: ${err instanceof Error ? err.message : 'unknown error'}`);
+      // Database errors can quote the query parameters (the email), so only the error class is logged.
+      this.logger.warn(`Google sign-in failed while signing in: ${err instanceof Error ? err.name : 'unknown error'}`);
       return this.redirect(res, '/sign-in?error=google_failed');
     }
   }

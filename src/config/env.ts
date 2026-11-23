@@ -7,7 +7,7 @@ export const envSchema = z
     SESSION_COOKIE_NAME: z.string().min(1).default('agi_sid'),
     LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
     /** Days without activity before a session expires. */
-    SESSION_IDLE_DAYS: z.coerce.number().int().positive().default(7),
+    SESSION_IDLE_DAYS: z.coerce.number().int().positive().max(30).default(7),
     /**
      * PBKDF2-SHA256 iterations. 10 000 is a compromise for the Workers free plan (~10 ms CPU per request); OWASP
      * recommends 600 000. Raise it after moving to a paid plan. Measure on staging before changing.
