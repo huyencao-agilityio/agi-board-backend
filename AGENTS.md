@@ -62,7 +62,7 @@ pnpm db:seed                    # system catalogs (prisma/seed.sql) + preset bac
   metadata. Entry `edge/src/index.mjs`; bindings reach Nest through `src/cloudflare.ts`. No Node-only APIs at
   runtime (no fs, no worker_threads: pino has no transport, Swagger has JSON only) and no native addons
   (argon2, bcrypt: use WebAssembly/pure-JS builds). Email goes through a provider's HTTP API, not SMTP.
-- Deploy: `.github/workflows/deploy.yml` after CI passes, `develop` → staging, `main` → production.
+- Deploy: `.github/workflows/deploy.yml`, called by `ci.yml` after its checks pass on a push, `develop` → staging, `main` → production.
 
 ## Git
 
