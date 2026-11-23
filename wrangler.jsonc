@@ -37,7 +37,7 @@
       ],
       "r2_buckets": [{ "binding": "IMAGES", "bucket_name": "agi-board-images-staging" }],
       "define": { "import.meta.url": "\"file:///worker.js\"" },
-      "vars": { "NODE_ENV": "production", "LOG_LEVEL": "info", "APP_ORIGIN": "https://staging.agi-board.workers.dev" },
+      "vars": { "NODE_ENV": "production", "LOG_LEVEL": "info", "APP_ORIGIN": "https://staging.huyen-cao.workers.dev" },
     },
     "production": {
       "d1_databases": [
@@ -50,7 +50,7 @@
       ],
       "r2_buckets": [{ "binding": "IMAGES", "bucket_name": "agi-board-images-production" }],
       "define": { "import.meta.url": "\"file:///worker.js\"" },
-      "vars": { "NODE_ENV": "production", "LOG_LEVEL": "info", "APP_ORIGIN": "https://app.agi-board.workers.dev" },
+      "vars": { "NODE_ENV": "production", "LOG_LEVEL": "info", "APP_ORIGIN": "https://app.huyen-cao.workers.dev" },
     },
   },
 }
