@@ -4,7 +4,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import type { Request, Response } from 'express';
 import helmet from 'helmet';
-import type { Env } from './config/env';
+import { docsEnabled, type Env } from './config/env';
 
 /** HTTP setup shared by main.ts and the e2e tests. Guards, pipes and filters are in AppModule. */
 export function setupApp(app: INestApplication) {
@@ -15,7 +15,7 @@ export function setupApp(app: INestApplication) {
   app.setGlobalPrefix('api/v1');
   app.enableShutdownHooks();
 
-  if (config.get('NODE_ENV', { infer: true }) !== 'production') {
+  if (docsEnabled(config.get('NODE_ENV', { infer: true }), config.get('ENABLE_DOCS', { infer: true }))) {
     const doc = SwaggerModule.createDocument(
       app,
       new DocumentBuilder()

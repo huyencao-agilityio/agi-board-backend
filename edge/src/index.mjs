@@ -15,7 +15,7 @@ await app.listen(PORT);
 
 // The Worker cannot know its public host, so only paths are logged.
 Logger.log('API server started at: <host>/api/v1', 'Bootstrap');
-if (env.NODE_ENV !== 'production') {
+if (env.ENABLE_DOCS ? env.ENABLE_DOCS === 'true' : env.NODE_ENV !== 'production') {
   Logger.log('API docs (Swagger UI) at: <host>/api/docs', 'Bootstrap'); // same rule as setupApp
 }
 

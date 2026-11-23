@@ -17,7 +17,7 @@ pnpm start:dev        # applies migrations, then http://localhost:8787/api/v1/he
 | URL                                               | What                                          |
 | ------------------------------------------------- | --------------------------------------------- |
 | http://localhost:8787/api/v1/health, `/health/db` | Liveness, database check                      |
-| http://localhost:8787/api/docs-json               | OpenAPI JSON (not in production; no UI)       |
+| http://localhost:8787/api/docs-json               | OpenAPI JSON (not in production unless ENABLE_DOCS=true; no UI)       |
 | http://localhost:8025                             | Mailpit (`pnpm mail:up`): emails from the API |
 
 Local variables: `wrangler.jsonc` `vars`, overridden by `.dev.vars` or `.env` (see `.env.example`).
