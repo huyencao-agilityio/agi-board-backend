@@ -31,24 +31,24 @@
         {
           "binding": "DB",
           "database_name": "agi-board-staging",
-          "database_id": "REPLACE_WITH_STAGING_D1_ID",
+          "database_id": "def3014e-4ac8-400e-a94b-9f22b3e4208f",
           "migrations_dir": "prisma/migrations",
         },
       ],
       "r2_buckets": [{ "binding": "IMAGES", "bucket_name": "agi-board-images-staging" }],
-      "vars": { "NODE_ENV": "production", "LOG_LEVEL": "info", "APP_ORIGIN": "https://REPLACE_WITH_STAGING_FRONTEND" },
+      "vars": { "NODE_ENV": "production", "LOG_LEVEL": "info", "APP_ORIGIN": "https://staging.agi-board.workers.dev" },
     },
     "production": {
       "d1_databases": [
         {
           "binding": "DB",
           "database_name": "agi-board-production",
-          "database_id": "REPLACE_WITH_PRODUCTION_D1_ID",
+          "database_id": "79bf599f-4c43-4059-b4e7-b6207cc18a38",
           "migrations_dir": "prisma/migrations",
         },
       ],
       "r2_buckets": [{ "binding": "IMAGES", "bucket_name": "agi-board-images-production" }],
-      "vars": { "NODE_ENV": "production", "LOG_LEVEL": "info", "APP_ORIGIN": "https://REPLACE_WITH_PRODUCTION_FRONTEND" },
+      "vars": { "NODE_ENV": "production", "LOG_LEVEL": "info", "APP_ORIGIN": "https://app.agi-board.workers.dev" },
     },
   },
 }
