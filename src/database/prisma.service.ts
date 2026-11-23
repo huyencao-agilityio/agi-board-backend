@@ -1,13 +1,13 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { PrismaPg } from '@prisma/adapter-pg';
+import { PrismaD1 } from '@prisma/adapter-d1';
+import { getBindings } from '../cloudflare';
 import { PrismaClient } from '../generated/prisma/client';
-import type { Env } from '../config/env';
 
+/** On D1, `$transaction` (both forms) is not atomic; use `getBindings().DB.batch()` for all-or-nothing writes. */
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
-  constructor(config: ConfigService<Env, true>) {
-    super({ adapter: new PrismaPg({ connectionString: config.get('DATABASE_URL', { infer: true }) }) });
+  constructor() {
+    super({ adapter: new PrismaD1(getBindings().DB) });
   }
 
   async onModuleInit() {

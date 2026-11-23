@@ -1,40 +1,7 @@
+# Local SMTP catcher for email work (`pnpm mail:up`). The API and database run in wrangler (`pnpm start:dev`).
 services:
-  postgres:
-    image: postgres:18
-    environment:
-      POSTGRES_USER: agi
-      POSTGRES_PASSWORD: agi
-      POSTGRES_DB: agi_board
-    ports:
-      - '${POSTGRES_PORT:-5432}:5432'
-    volumes:
-      - pgdata:/var/lib/postgresql
-      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U agi -d agi_board']
-      interval: 2s
-      timeout: 3s
-      retries: 30
-
   mailpit:
     image: axllent/mailpit:v1.27
     ports:
       - '1025:1025' # SMTP
       - '8025:8025' # web UI
-
-  api:
-    profiles: [app]
-    build: .
-    env_file: .env
-    environment:
-      NODE_ENV: production
-      DATABASE_URL: postgresql://agi:agi@postgres:5432/agi_board
-      SMTP_HOST: mailpit
-    ports:
-      - '3000:3000'
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-volumes:
-  pgdata:

@@ -6,7 +6,19 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['eslint.config.mjs', 'commitlint.config.mjs', '.claude/**', 'dist/**', 'coverage/**', 'src/generated/**'],
+    // edge/ and the wasm shim are small plain-JS glue outside the TS project.
+    ignores: [
+      'eslint.config.mjs',
+      'commitlint.config.mjs',
+      '.claude/**',
+      '.wrangler/**',
+      'dist/**',
+      'dist-worker/**',
+      'coverage/**',
+      'src/generated/**',
+      'edge/**',
+      'test/setup/prisma-wasm.js',
+    ],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,

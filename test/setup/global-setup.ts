@@ -1,9 +1,13 @@
 import { execSync } from 'node:child_process';
+import { E2E_STATE_DIR } from './state';
 
-/** e2e tests run against a separate database, migrated from scratch-safe `migrate deploy`. */
+/** e2e tests run against their own local D1 (wrangler state in E2E_STATE_DIR), migrated by wrangler. */
 export default function globalSetup() {
-  process.env.DATABASE_URL = process.env.TEST_DATABASE_URL ?? 'postgresql://agi:agi@localhost:5432/agi_board_test';
   process.env.NODE_ENV = 'test';
   process.env.LOG_LEVEL ??= 'warn';
-  execSync('pnpm prisma migrate deploy', { stdio: 'inherit', env: process.env });
+  process.env.APP_ORIGIN ??= 'http://localhost:5173';
+  execSync(`pnpm -s wrangler d1 migrations apply DB --local --persist-to ${E2E_STATE_DIR}`, {
+    stdio: 'inherit',
+    env: { ...process.env, CI: 'true' },
+  });
 }

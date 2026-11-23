@@ -1,31 +1,27 @@
-# edge (not implemented yet)
+# edge
 
-Cloudflare code that fronts the API. Only the folder exists for now; it is implemented in the
-deployment phase. Nothing here is built, linted or deployed by CI yet.
+The Cloudflare Worker entry. The whole NestJS API runs inside one Worker (no container); config is
+`wrangler.jsonc` at the repo root.
 
-## Planned contents
+| File               | Role                                                                                                            |
+| ------------------ | --------------------------------------------------------------------------------------------------------------- |
+| `src/index.mjs`    | Hands the bindings (`DB` = D1, `IMAGES` = R2) to `src/cloudflare.ts`, builds the Nest app and serves it through `httpServerHandler` (Express on the Workers `node:http` server). |
+| `src/empty-module.mjs` | Stand-in for optional Nest packages the app never loads (`alias` in `wrangler.jsonc`).                       |
 
-| File                   | Role                                                                                                                                                                                                                |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/index.ts`         | Gateway Worker. `fetch`: `/api/*` → `ApiContainer`, `/ws/boards/:id` → `BoardRoom`, `/internal/broadcast` from the API. `scheduled`: Cron Trigger → API reminders endpoint. Blocks outside access to `/internal/*`. |
-| `src/api-container.ts` | `class ApiContainer extends Container` (`@cloudflare/containers`), runs this repo's `Dockerfile`.                                                                                                                   |
-| `src/board-room.ts`    | Durable Object, one per board. Holds viewers' WebSockets (Hibernation API) and pushes changes the API sends after each commit.                                                                                      |
-| `wrangler.jsonc`       | Bindings: `containers`, `durable_objects`, `triggers.crons`; envs `staging`, `production`.                                                                                                                          |
-| `package.json`         | Own dependencies (`wrangler`, `@cloudflare/containers`); added to `pnpm-workspace.yaml` and CI when implemented.                                                                                                    |
+## Build
+
+`wrangler dev` / `wrangler deploy` run `nest build` first (`build.command` in `wrangler.jsonc`), then bundle
+`dist/` from `src/index.mjs`. Nest is compiled by `tsc` because esbuild, which wrangler bundles with, cannot
+emit the decorator metadata Nest's dependency injection reads.
 
 ## Request flow
 
 ```
-Browser ──HTTPS /api/*──▶ Gateway Worker ──▶ ApiContainer (NestJS) ──▶ PostgreSQL / R2 / email
-Browser ◀─WSS /ws/boards/:id─▶ Gateway Worker ──▶ BoardRoom (Durable Object)
-ApiContainer ──POST /internal/broadcast (HMAC)──▶ Gateway Worker ──▶ BoardRoom
-Cron Trigger ──▶ Gateway Worker ──POST /internal/cron/reminders (HMAC)──▶ ApiContainer
+Browser ──HTTPS /api/v1/*──▶ Worker (Nest + Express) ──▶ D1 (DB) / R2 (IMAGES)
 ```
 
-## To verify first (risk R-07)
+## Not built yet
 
-1. Worker forwards requests to the container with cookies and headers intact.
-2. The container can call back into the Worker to broadcast (signed with a shared HMAC secret).
-3. Before a WebSocket upgrade, the Worker asks the API whether the cookie's user may view the board.
-4. Container cold start and idle sleep times; choose `sleepAfter` and minimum instances.
-5. Cron Trigger reaches the reminders endpoint.
+Real-time board updates (Durable Object per board, WebSocket Hibernation API) and the due-date reminder
+Cron Trigger. Both would be added to this Worker (`durable_objects`, `triggers.crons` in `wrangler.jsonc`)
+when their tickets come up.

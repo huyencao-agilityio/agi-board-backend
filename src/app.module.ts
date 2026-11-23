@@ -24,7 +24,6 @@ import { HealthModule } from './modules/health/health.module';
             return id;
           },
           redact: ['req.headers.cookie', 'req.headers.authorization', 'res.headers["set-cookie"]'],
-          transport: config.get('NODE_ENV', { infer: true }) === 'development' ? { target: 'pino-pretty' } : undefined,
         },
       }),
     }),

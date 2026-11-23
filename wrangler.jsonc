@@ -1,0 +1,54 @@
+// Cloudflare Worker running the NestJS API. Top level = local dev (`pnpm start:dev`, e2e tests);
+// `env.staging` (deployed from develop) and `env.production` (from main) by .github/workflows/deploy.yml.
+// Bindings are not inherited by envs, so each env repeats them. Create the resources once: see README "Deploy".
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "agi-board-backend",
+  "main": "edge/src/index.mjs",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "build": { "command": "pnpm nest build", "watch_dir": "src" },
+  // Nest and Swagger require these optional packages only when used (microservices, websockets, Fastify).
+  "alias": {
+    "@nestjs/microservices": "./edge/src/empty-module.mjs",
+    "@nestjs/microservices/microservices-module": "./edge/src/empty-module.mjs",
+    "@nestjs/websockets/socket-module": "./edge/src/empty-module.mjs",
+    "@fastify/static": "./edge/src/empty-module.mjs",
+    // pino's "browser" build (picked by wrangler's resolver) lacks pino.symbols, which pino-http needs.
+    "pino": "./node_modules/pino/pino.js",
+  },
+  // @nestjs/swagger calls createRequire(import.meta.url) at load; the bundled Worker has no file URL.
+  "define": { "import.meta.url": "\"file:///worker.js\"" },
+  "observability": { "enabled": true },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "agi-board-local", "database_id": "local", "migrations_dir": "prisma/migrations" },
+  ],
+  "r2_buckets": [{ "binding": "IMAGES", "bucket_name": "agi-board-images-local" }],
+  "vars": { "NODE_ENV": "development", "LOG_LEVEL": "debug", "APP_ORIGIN": "http://localhost:5173" },
+  "env": {
+    "staging": {
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "agi-board-staging",
+          "database_id": "REPLACE_WITH_STAGING_D1_ID",
+          "migrations_dir": "prisma/migrations",
+        },
+      ],
+      "r2_buckets": [{ "binding": "IMAGES", "bucket_name": "agi-board-images-staging" }],
+      "vars": { "NODE_ENV": "production", "LOG_LEVEL": "info", "APP_ORIGIN": "https://REPLACE_WITH_STAGING_FRONTEND" },
+    },
+    "production": {
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "agi-board-production",
+          "database_id": "REPLACE_WITH_PRODUCTION_D1_ID",
+          "migrations_dir": "prisma/migrations",
+        },
+      ],
+      "r2_buckets": [{ "binding": "IMAGES", "bucket_name": "agi-board-images-production" }],
+      "vars": { "NODE_ENV": "production", "LOG_LEVEL": "info", "APP_ORIGIN": "https://REPLACE_WITH_PRODUCTION_FRONTEND" },
+    },
+  },
+}

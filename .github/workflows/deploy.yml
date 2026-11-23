@@ -1,0 +1,43 @@
+name: Deploy
+
+# Runs after CI passes on a push: develop -> staging, main -> production (wrangler.jsonc "env").
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [develop, main]
+
+concurrency:
+  group: deploy-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false # never stop a deploy halfway through its migrations
+
+jobs:
+  deploy:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    # GitHub Environments hold the Cloudflare secrets; add required reviewers on "production" to gate releases.
+    environment: ${{ github.event.workflow_run.head_branch == 'main' && 'production' || 'staging' }}
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WRANGLER_ENV: ${{ github.event.workflow_run.head_branch == 'main' && 'production' || 'staging' }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }} # exactly the commit CI tested
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Migrations run before the new code goes live, so keep them backward compatible (add, then remove later).
+      # D1 Time Travel can restore the database to any minute of the last 30 days if one goes wrong.
+      - name: Apply D1 migrations
+        run: pnpm exec wrangler d1 migrations apply DB --remote --env "$WRANGLER_ENV"
+      - name: Seed system catalogs (idempotent)
+        run: pnpm exec wrangler d1 execute DB --remote --env "$WRANGLER_ENV" --file prisma/seed.sql
+      - name: Upload preset board backgrounds to R2 (idempotent)
+        run: sh scripts/upload-backgrounds.sh --remote --env "$WRANGLER_ENV"
+      - name: Deploy Worker
+        run: pnpm exec wrangler deploy --env "$WRANGLER_ENV" --message "${{ github.event.workflow_run.head_sha }}"

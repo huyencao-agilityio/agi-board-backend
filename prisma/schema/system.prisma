@@ -3,9 +3,9 @@ model LabelColor {
   id        String   @id
   name      String
   hex       String
-  sortOrder Int      @unique @map("sort_order") @db.SmallInt
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  sortOrder Int      @unique @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
   labels    Label[]
 
   @@map("label_colors")
@@ -16,26 +16,26 @@ model BoardBackground {
   name               String
   imageObjectKey     String   @map("image_object_key")
   thumbnailObjectKey String   @map("thumbnail_object_key")
-  sortOrder          Int      @unique @map("sort_order") @db.SmallInt
-  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  sortOrder          Int      @unique @map("sort_order")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
   boards             Board[]
 
   @@map("board_backgrounds")
 }
 
 model Notification {
-  id          String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  recipientId String           @map("recipient_id") @db.Uuid
-  actorId     String?          @map("actor_id") @db.Uuid
+  id          String           @id @default(uuid(7))
+  recipientId String           @map("recipient_id")
+  actorId     String?          @map("actor_id")
   type        NotificationType
-  workspaceId String?          @map("workspace_id") @db.Uuid
-  cardId      String?          @map("card_id") @db.Uuid
-  inviteId    String?          @map("invite_id") @db.Uuid
+  workspaceId String?          @map("workspace_id")
+  cardId      String?          @map("card_id")
+  inviteId    String?          @map("invite_id")
   data        Json             @default("{}")
-  readAt      DateTime?        @map("read_at") @db.Timestamptz(6)
-  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  readAt      DateTime?        @map("read_at")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @default(now()) @updatedAt @map("updated_at")
   actor       User?            @relation("NotificationActor", fields: [actorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   card        Card?            @relation(fields: [cardId], references: [id], onUpdate: NoAction)
   invite      Invite?          @relation(fields: [inviteId], references: [id], onUpdate: NoAction)
@@ -52,17 +52,17 @@ model Notification {
 }
 
 model AuditLogEntry {
-  id          String      @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  workspaceId String?     @map("workspace_id") @db.Uuid
-  actorId     String      @map("actor_id") @db.Uuid
+  id          String      @id @default(uuid(7))
+  workspaceId String?     @map("workspace_id")
+  actorId     String      @map("actor_id")
   actorName   String      @map("actor_name")
   action      AuditAction
   targetType  String      @map("target_type")
-  targetId    String?     @map("target_id") @db.Uuid
+  targetId    String?     @map("target_id")
   targetLabel String      @map("target_label")
   data        Json        @default("{}")
-  createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @default(now()) @updatedAt @map("updated_at")
   actor       User        @relation(fields: [actorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   workspace   Workspace?  @relation(fields: [workspaceId], references: [id], onUpdate: NoAction)
 

@@ -12,5 +12,10 @@ generated/
 !.vscode/extensions.json
 .claude/settings.local.json
 
-# pull-ticket working notes
-tasks/
+# speckit's current feature pointer (per developer; specs/ itself is committed)
+.specify/feature.json
+
+# wrangler local state (D1/R2 for dev and e2e)
+.wrangler/
+dist-worker/
+.dev.vars
