@@ -51,6 +51,7 @@
         "NODE_ENV": "production",
         "LOG_LEVEL": "info",
         "APP_ORIGIN": "https://agi-board-staging.huyen-cao.workers.dev",
+        "GOOGLE_CLIENT_ID": "131383433143-3l3efp1hmh4706ns11ml9gikuipcscj4.apps.googleusercontent.com",
         "GOOGLE_REDIRECT_URI": "https://agi-board-staging.huyen-cao.workers.dev/api/v1/auth/google/callback",
       },
     },
