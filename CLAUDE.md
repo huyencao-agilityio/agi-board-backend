@@ -5,6 +5,9 @@
 - Reply to the user in Vietnamese; code, comments, commits and PRs in English.
 - Starting work on a Trello card (number or URL): use the `pull-ticket` skill.
 - Creating a pull request: use the `create-pr` skill.
+- The full flow is the diagram in `README.md`: after implementing, run the checks, then the `code-reviewer` agent
+  (and `security-auditor` when the change touches auth, guards, controllers, DTOs, Prisma queries or config), fix
+  Critical and High findings, and only then `/create-pr`. Do not rely on a skill's "Next" line alone for this.
 - `pnpm db:reset` deletes the local D1 (`.wrangler/state/v3/d1`), then re-migrates and seeds it. The guard hook
   blocks it for agents because it wipes local data; do not bypass it, ask the user to run it.
 - Before saying a change is done, run `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm test:e2e` when

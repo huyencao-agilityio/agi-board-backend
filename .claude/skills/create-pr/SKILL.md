@@ -25,8 +25,19 @@ Every PR belongs to one Trello ticket. The ticket id is the card number on the b
    if a commit fails, tell the user and offer to reword it (only on branches not yet merged).
 4. **Base exists.** `git ls-remote --heads origin develop`. If `develop` does not exist on the remote, stop and tell
    the user: it must be created from `main` and pushed first.
-5. **Checks.** Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e`, `pnpm db:check`.
-   Do not open the PR while one fails; report the output.
+5. **Checks and review.** Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e`, `pnpm db:check`.
+   Do not open the PR while one fails; report the output. Then, as in the flow in `README.md`:
+   - run the `code-reviewer` agent on the branch diff against `origin/develop`;
+   - also run the `security-auditor` agent when the diff touches auth, guards, controllers, DTOs, Prisma queries
+     or config (`src/config/`, `wrangler.jsonc`, env vars);
+   - fix every Critical and High finding and re-run the checks, or tell the user which ones remain and why;
+     do not open the PR with an unaddressed Critical or High. Mention Medium findings you leave open in the
+     PR's **Risk** section;
+   - if the agents are not available by name in this session (they are only registered when the session starts in
+     the checkout that holds `.claude/agents/`), read `.claude/agents/<name>.md` and run its instructions through a
+     general-purpose agent; do not skip the review;
+   - if a review already ran on the current commit in this conversation, reuse its result instead of running it
+     again.
 6. **Title.** The Trello card name, copied verbatim (it is written as an imperative, e.g.
    "Implement feature User Sign In"). Do not add the type prefix or the ticket number.
 7. **Body.** Fill every section of `.github/pull_request_template.md` from the ticket, commits and diff
