@@ -49,6 +49,7 @@
       "define": { "import.meta.url": "\"file:///worker.js\"" },
       "vars": {
         "NODE_ENV": "production",
+        "ENABLE_DOCS": "true",
         "LOG_LEVEL": "info",
         "APP_ORIGIN": "https://agi-board-staging.huyen-cao.workers.dev",
         "GOOGLE_CLIENT_ID": "131383433143-3l3efp1hmh4706ns11ml9gikuipcscj4.apps.googleusercontent.com",

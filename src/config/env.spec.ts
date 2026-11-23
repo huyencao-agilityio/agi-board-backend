@@ -1,4 +1,4 @@
-import { validateEnv } from './env';
+import { docsEnabled, validateEnv } from './env';
 
 describe('validateEnv', () => {
   const valid = { APP_ORIGIN: 'http://localhost:5173' };
@@ -15,6 +15,13 @@ describe('validateEnv', () => {
     expect(validateEnv({ ...valid, SESSION_IDLE_DAYS: '3' }).SESSION_IDLE_DAYS).toBe(3);
     expect(() => validateEnv({ ...valid, SESSION_IDLE_DAYS: '0' })).toThrow(/SESSION_IDLE_DAYS/);
     expect(() => validateEnv({ ...valid, SESSION_IDLE_DAYS: '31' })).toThrow(/SESSION_IDLE_DAYS/);
+  });
+
+  it('turns docs on outside production and when ENABLE_DOCS=true', () => {
+    expect(docsEnabled('development')).toBe(true);
+    expect(docsEnabled('production')).toBe(false);
+    expect(docsEnabled('production', 'true')).toBe(true);
+    expect(docsEnabled('development', 'false')).toBe(false);
   });
 
   it('does not require Google variables outside production', () => {

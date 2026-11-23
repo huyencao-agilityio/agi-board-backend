@@ -14,6 +14,8 @@ export const envSchema = z
      */
     PASSWORD_PBKDF2_ITERATIONS: z.coerce.number().int().min(1000).default(10_000),
     // Optional outside production so local dev and tests boot without a Google project; see the refine below.
+    /** Serves Swagger UI. Defaults to on outside production; staging sets it to 'true'. */
+    ENABLE_DOCS: z.enum(['true', 'false']).optional(),
     GOOGLE_CLIENT_ID: z.string().min(1).optional(),
     GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
     GOOGLE_REDIRECT_URI: z.url().optional(),
@@ -24,6 +26,11 @@ export const envSchema = z
       if (!env[key]) ctx.addIssue({ code: 'custom', path: [key], message: `${key} is required in production` });
     }
   });
+
+/** Swagger is on outside production unless ENABLE_DOCS says otherwise. */
+export function docsEnabled(nodeEnv: Env['NODE_ENV'], enableDocs?: Env['ENABLE_DOCS']): boolean {
+  return enableDocs ? enableDocs === 'true' : nodeEnv !== 'production';
+}
 
 export type Env = z.infer<typeof envSchema>;
 
