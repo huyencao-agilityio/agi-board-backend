@@ -131,6 +131,7 @@ enum SessionEndReason {
   signed_out_by_admin
   password_reset
   password_changed
+  expired
 
   @@map("session_end_reason")
 }
