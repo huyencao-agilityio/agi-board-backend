@@ -1,15 +1,17 @@
 // Models are split by area in this folder (auth, workspaces, boards, cards, system, enums).
-// Prisma cannot express CHECK constraints, expression indexes, NULLS NOT DISTINCT or
-// DEFERRABLE constraints: they live in the "manual" block of the init migration.
-// Review every new migration: Prisma may try to drop those objects.
+// Database: Cloudflare D1 (SQLite). Migrations are wrangler SQL files in prisma/migrations/.
+// Prisma cannot express CHECK constraints or expression indexes: they are hand-written ("-- manual")
+// in prisma/migrations/0001_init.sql. Review every new migration: a table rebuild may drop them.
+// runtime "workerd": the client loads its wasm the way Workers allow (Jest maps it, see test/jest-e2e.json).
 
 generator client {
   provider        = "prisma-client"
   output          = "../../src/generated/prisma"
   previewFeatures = ["partialIndexes"]
   moduleFormat    = "cjs"
+  runtime         = "workerd"
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
 }

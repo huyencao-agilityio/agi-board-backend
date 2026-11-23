@@ -1,5 +1,4 @@
-import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient } from '../src/generated/prisma/client';
+import { getBindings } from '../src/cloudflare';
 
 /**
  * Prisma cannot express these objects; they are hand-written in the init migration.
@@ -32,37 +31,26 @@ const MANUAL_CHECKS = [
 ];
 const MANUAL_INDEXES = [
   'idx_users_full_name',
-  'idx_users_search_trgm',
   'idx_boards_workspace_open',
-  'idx_cards_search_trgm',
   'uq_card_links_pair',
+  'uq_invites_pending_target_nulls',
 ];
 
 describe('manual schema objects (e2e)', () => {
-  const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }) });
-  afterAll(() => prisma.$disconnect());
+  async function schema() {
+    const { results } = await getBindings()
+      .DB.prepare('SELECT name, sql FROM sqlite_master WHERE sql IS NOT NULL')
+      .all<{ name: string; sql: string }>();
+    return results;
+  }
 
   it('keeps every CHECK constraint', async () => {
-    const rows = await prisma.$queryRaw<{ conname: string }[]>`
-      SELECT conname FROM pg_constraint WHERE contype = 'c' AND connamespace = 'public'::regnamespace`;
-    expect(rows.map((r) => r.conname)).toEqual(expect.arrayContaining(MANUAL_CHECKS));
+    const sql = (await schema()).map((r) => r.sql).join('\n');
+    for (const name of MANUAL_CHECKS) expect(sql).toContain(`CONSTRAINT "${name}" CHECK`);
   });
 
   it('keeps every expression index', async () => {
-    const rows = await prisma.$queryRaw<{ indexname: string }[]>`
-      SELECT indexname FROM pg_indexes WHERE schemaname = 'public'`;
-    expect(rows.map((r) => r.indexname)).toEqual(expect.arrayContaining(MANUAL_INDEXES));
-  });
-
-  it('keeps NULLS NOT DISTINCT on pending invites', async () => {
-    const [row] = await prisma.$queryRaw<{ indexdef: string }[]>`
-      SELECT indexdef FROM pg_indexes WHERE indexname = 'uq_invites_pending_target'`;
-    expect(row.indexdef).toContain('NULLS NOT DISTINCT');
-  });
-
-  it('keeps the card number constraint deferrable', async () => {
-    const [row] = await prisma.$queryRaw<{ condeferred: boolean }[]>`
-      SELECT condeferred FROM pg_constraint WHERE conname = 'uq_cards_board_number'`;
-    expect(row.condeferred).toBe(true);
+    const names = (await schema()).map((r) => r.name);
+    expect(names).toEqual(expect.arrayContaining(MANUAL_INDEXES));
   });
 });

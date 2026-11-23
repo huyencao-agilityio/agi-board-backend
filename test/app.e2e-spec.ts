@@ -78,6 +78,18 @@ describe('App (e2e)', () => {
   }
 
   describe('health', () => {
+    it('GET /api/docs serves Swagger UI with its own CSP', async () => {
+      const res = await request(app.getHttpServer()).get('/api/docs').expect(200);
+      expect(res.headers['content-type']).toMatch(/text\/html/);
+      expect(res.headers['content-security-policy']).toContain('cdn.jsdelivr.net');
+      expect(res.text).toContain('/api/docs-json');
+    });
+
+    it('GET /api/docs-json serves the OpenAPI document', async () => {
+      const res = await request(app.getHttpServer()).get('/api/docs-json').expect(200);
+      expect(res.body).toHaveProperty('openapi');
+    });
+
     it('GET /health is public', () => request(app.getHttpServer()).get('/api/v1/health').expect(200, { status: 'ok' }));
 
     it('GET /health/db reaches the database', () =>

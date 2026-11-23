@@ -21,17 +21,17 @@ Schema and migration rules (manual objects, no `db push`, never edit an applied 
 
 ## Transactions and ordering
 
-- Multi-row writes use the interactive form `this.prisma.$transaction(async (tx) => ...)` and only `tx` inside it. Keep transactions short: no HTTP calls, emails or event publishing inside.
-- Re-ordering (R-06): lists/cards/checklists use a `pos` float. Insert between neighbours by midpoint; when the gap gets too small, renumber the whole list in one transaction after locking the rows with `tx.$queryRaw\`SELECT id FROM cards WHERE list_id = ${listId} FOR UPDATE\``.
-- `cards.number` is unique per board with a deferred constraint, so numbers can be swapped inside one transaction.
+- D1 has no interactive transactions, and Prisma's D1 adapter runs `$transaction` (both forms) as separate, non-atomic queries. Writes that must be all-or-nothing go through D1's own batch, `getBindings().DB.batch([...prepared statements])` (one implicit transaction), or are a single SQL statement. Compute everything first; no HTTP calls, emails or event publishing inside.
+- Re-ordering (R-06): lists/cards/checklists use a `pos` float. Insert between neighbours by midpoint; when the gap gets too small, renumber the whole list in one `DB.batch`. SQLite has no `FOR UPDATE`; D1 runs one write at a time, so a batch is not interleaved with other writes.
+- `cards.number` is unique per board, checked per statement (no DEFERRABLE in SQLite): swap numbers through a temporary value (e.g. negative) inside one `DB.batch`.
 
 ## Raw SQL
 
-- Only when Prisma cannot express it (`FOR UPDATE`, trigram search, CTEs). Use tagged templates, select explicit columns, and type the result (`$queryRaw<{ id: string }[]>`).
+- Only when Prisma cannot express it (CTEs, expression filters). SQLite syntax: no `ILIKE`, `::casts` or Postgres functions. Use tagged templates, select explicit columns, and type the result (`$queryRaw<{ id: string }[]>`).
 - Remember raw SQL uses table/column names (`snake_case`, `@@map`/`@map`), not model names.
 
 ## Schema changes
 
-- After editing `prisma/schema/*.prisma`: `pnpm db:migrate:new <snake_name>`, read the generated SQL (no dropped `-- manual:` object, no unintended data loss), `pnpm db:migrate:dev`, `pnpm db:check`, and `pnpm prisma generate` if types look stale.
-- New tables follow the existing schema: `id String @id @default(dbgenerated("uuidv7()")) @db.Uuid`, `createdAt`/`updatedAt` as `@db.Timestamptz(6)`, snake_case `@map`/`@@map`, named indexes (`idx_<table>_<cols>`, `uq_<table>_<cols>`).
-- New catalog data goes into `prisma/seed.ts` as an idempotent upsert.
+- After editing `prisma/schema/*.prisma`: `pnpm db:migrate:new <snake_name>`, `pnpm db:diff >> <the new file>`, read the SQL (a table rebuild must keep the `-- manual` CHECKs, no unintended data loss), `pnpm db:migrate`, `pnpm db:check`, and `pnpm prisma generate` if types look stale.
+- New tables follow the existing schema: `id String @id @default(uuid(7))`, `createdAt`/`updatedAt` `DateTime`, snake_case `@map`/`@@map`, named indexes (`idx_<table>_<cols>`, `uq_<table>_<cols>`).
+- New catalog data goes into `prisma/seed.sql` as an idempotent `INSERT ... ON CONFLICT DO UPDATE` (deploy re-runs it).

@@ -10,11 +10,10 @@
       "Bash(pnpm test *)",
       "Bash(pnpm test:e2e)",
       "Bash(pnpm build)",
-      "Bash(pnpm db:up)",
       "Bash(pnpm db:check)",
       "Bash(pnpm db:migrate)",
-      "Bash(pnpm db:migrate:dev)",
       "Bash(pnpm db:migrate:new *)",
+      "Bash(pnpm db:diff)",
       "Bash(pnpm db:seed)",
       "Bash(pnpm prisma generate)",
       "Bash(pnpm prisma format)",
@@ -94,7 +93,11 @@
     "Stop": [
       {
         "hooks": [
-          { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard.mjs\" stop", "timeout": 15 }
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard.mjs\" stop",
+            "timeout": 15
+          }
         ]
       }
     ]

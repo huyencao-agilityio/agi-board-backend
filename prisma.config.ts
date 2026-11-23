@@ -1,16 +1,8 @@
-import 'dotenv/config';
 import { defineConfig } from 'prisma/config';
 
 export default defineConfig({
   schema: 'prisma/schema',
-  migrations: {
-    path: 'prisma/migrations',
-    seed: 'tsx prisma/seed.ts',
-  },
-  datasource: {
-    // process.env, not env(): `prisma generate` must work without a database (Docker build, CI install).
-    url: process.env.DATABASE_URL,
-    // Only `prisma migrate dev` needs it; CI and deploy run `migrate deploy`.
-    shadowDatabaseUrl: process.env.SHADOW_DATABASE_URL,
-  },
+  // Migrations are plain SQL files applied by wrangler (`wrangler d1 migrations apply`), not by Prisma Migrate.
+  // DATABASE_URL is only set by scripts/db-diff.sh, to a throwaway local D1 file, for `prisma migrate diff`.
+  datasource: { url: process.env.DATABASE_URL },
 });

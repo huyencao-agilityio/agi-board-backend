@@ -1,26 +1,26 @@
 /// Has CHECK constraints: see the manual block in the init migration.
 /// Has expression indexes: see the manual block in the init migration.
 model Card {
-  id                    String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  boardId               String         @map("board_id") @db.Uuid
-  listId                String         @map("list_id") @db.Uuid
+  id                    String         @id @default(uuid(7))
+  boardId               String         @map("board_id")
+  listId                String         @map("list_id")
   number                Int
   title                 String
   description           String?
   pos                   Float
   coverColor            String?        @map("cover_color")
-  startAt               DateTime?      @map("start_at") @db.Timestamptz(6)
-  dueAt                 DateTime?      @map("due_at") @db.Timestamptz(6)
+  startAt               DateTime?      @map("start_at")
+  dueAt                 DateTime?      @map("due_at")
   reminderOffsetMinutes Int?           @map("reminder_offset_minutes")
-  reminderAt            DateTime?      @map("reminder_at") @db.Timestamptz(6)
-  reminderSentForDue    DateTime?      @map("reminder_sent_for_due") @db.Timestamptz(6)
-  completedAt           DateTime?      @map("completed_at") @db.Timestamptz(6)
-  completedById         String?        @map("completed_by_id") @db.Uuid
-  archivedAt            DateTime?      @map("archived_at") @db.Timestamptz(6)
-  archivedById          String?        @map("archived_by_id") @db.Uuid
-  createdById           String         @map("created_by_id") @db.Uuid
-  createdAt             DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt             DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  reminderAt            DateTime?      @map("reminder_at")
+  reminderSentForDue    DateTime?      @map("reminder_sent_for_due")
+  completedAt           DateTime?      @map("completed_at")
+  completedById         String?        @map("completed_by_id")
+  archivedAt            DateTime?      @map("archived_at")
+  archivedById          String?        @map("archived_by_id")
+  createdById           String         @map("created_by_id")
+  createdAt             DateTime       @default(now()) @map("created_at")
+  updatedAt             DateTime       @default(now()) @updatedAt @map("updated_at")
   activities            Activity[]
   attachments           Attachment[]
   cardLabels            CardLabel[]
@@ -50,11 +50,11 @@ model Card {
 }
 
 model CardLabel {
-  id        String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  cardId    String   @map("card_id") @db.Uuid
-  labelId   String   @map("label_id") @db.Uuid
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id        String   @id @default(uuid(7))
+  cardId    String   @map("card_id")
+  labelId   String   @map("label_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
   card      Card     @relation(fields: [cardId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   label     Label    @relation(fields: [labelId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
@@ -65,11 +65,11 @@ model CardLabel {
 }
 
 model CardMember {
-  id        String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  cardId    String   @map("card_id") @db.Uuid
-  userId    String   @map("user_id") @db.Uuid
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id        String   @id @default(uuid(7))
+  cardId    String   @map("card_id")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
   card      Card     @relation(fields: [cardId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   user      User     @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
@@ -80,11 +80,11 @@ model CardMember {
 }
 
 model CardWatcher {
-  id        String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  cardId    String   @map("card_id") @db.Uuid
-  userId    String   @map("user_id") @db.Uuid
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id        String   @id @default(uuid(7))
+  cardId    String   @map("card_id")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
   card      Card     @relation(fields: [cardId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   user      User     @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
@@ -96,12 +96,12 @@ model CardWatcher {
 
 /// Has CHECK constraints: see the manual block in the init migration.
 model Checklist {
-  id             String          @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  cardId         String          @map("card_id") @db.Uuid
+  id             String          @id @default(uuid(7))
+  cardId         String          @map("card_id")
   title          String
   pos            Float
-  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @default(now()) @updatedAt @map("updated_at")
   checklistItems ChecklistItem[]
   card           Card            @relation(fields: [cardId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
@@ -111,13 +111,13 @@ model Checklist {
 
 /// Has CHECK constraints: see the manual block in the init migration.
 model ChecklistItem {
-  id          String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  checklistId String    @map("checklist_id") @db.Uuid
+  id          String    @id @default(uuid(7))
+  checklistId String    @map("checklist_id")
   text        String
   pos         Float
-  checkedAt   DateTime? @map("checked_at") @db.Timestamptz(6)
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  checkedAt   DateTime? @map("checked_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at")
   checklist   Checklist @relation(fields: [checklistId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([checklistId, pos], map: "idx_checklist_items_checklist_id")
@@ -127,13 +127,13 @@ model ChecklistItem {
 /// Has CHECK constraints: see the manual block in the init migration.
 /// Has expression indexes: see the manual block in the init migration.
 model CardLink {
-  id           String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  sourceCardId String       @map("source_card_id") @db.Uuid
-  targetCardId String       @map("target_card_id") @db.Uuid
+  id           String       @id @default(uuid(7))
+  sourceCardId String       @map("source_card_id")
+  targetCardId String       @map("target_card_id")
   type         CardLinkType
-  createdById  String       @map("created_by_id") @db.Uuid
-  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdById  String       @map("created_by_id")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @default(now()) @updatedAt @map("updated_at")
   createdBy    User         @relation(fields: [createdById], references: [id], onDelete: NoAction, onUpdate: NoAction)
   sourceCard   Card         @relation("CardLinkSourceCard", fields: [sourceCardId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   targetCard   Card         @relation("CardLinkTargetCard", fields: [targetCardId], references: [id], onDelete: Cascade, onUpdate: NoAction)
@@ -146,16 +146,16 @@ model CardLink {
 
 /// Has CHECK constraints: see the manual block in the init migration.
 model Attachment {
-  id               String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  cardId           String   @map("card_id") @db.Uuid
-  uploadedById     String   @map("uploaded_by_id") @db.Uuid
+  id               String   @id @default(uuid(7))
+  cardId           String   @map("card_id")
+  uploadedById     String   @map("uploaded_by_id")
   fileName         String   @map("file_name")
   contentType      String   @map("content_type")
   sizeBytes        BigInt   @map("size_bytes")
   objectKey        String   @unique @map("object_key")
   previewObjectKey String?  @map("preview_object_key")
-  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at")
   card             Card     @relation(fields: [cardId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   uploadedBy       User     @relation(fields: [uploadedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
@@ -166,13 +166,13 @@ model Attachment {
 
 /// Has CHECK constraints: see the manual block in the init migration.
 model Comment {
-  id        String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  cardId    String    @map("card_id") @db.Uuid
-  authorId  String    @map("author_id") @db.Uuid
+  id        String    @id @default(uuid(7))
+  cardId    String    @map("card_id")
+  authorId  String    @map("author_id")
   body      String
-  editedAt  DateTime? @map("edited_at") @db.Timestamptz(6)
-  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  editedAt  DateTime? @map("edited_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at")
   author    User      @relation(fields: [authorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   card      Card      @relation(fields: [cardId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
@@ -183,14 +183,14 @@ model Comment {
 
 /// Has CHECK constraints: see the manual block in the init migration.
 model Activity {
-  id        String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  boardId   String       @map("board_id") @db.Uuid
-  cardId    String?      @map("card_id") @db.Uuid
-  actorId   String       @map("actor_id") @db.Uuid
+  id        String       @id @default(uuid(7))
+  boardId   String       @map("board_id")
+  cardId    String?      @map("card_id")
+  actorId   String       @map("actor_id")
   type      ActivityType
   data      Json         @default("{}")
-  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @default(now()) @updatedAt @map("updated_at")
   actor     User         @relation(fields: [actorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   board     Board        @relation(fields: [boardId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   card      Card?        @relation(fields: [cardId], references: [id], onDelete: Cascade, onUpdate: NoAction)

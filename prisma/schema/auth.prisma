@@ -1,20 +1,20 @@
 /// Has CHECK constraints: see the manual block in the init migration.
 /// Has expression indexes: see the manual block in the init migration.
 model User {
-  id                     String                  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  id                     String                  @id @default(uuid(7))
   email                  String                  @unique
   fullName               String                  @map("full_name")
   avatarObjectKey        String?                 @map("avatar_object_key")
   passwordHash           String?                 @map("password_hash")
   googleSubject          String?                 @unique @map("google_subject")
-  emailVerifiedAt        DateTime?               @map("email_verified_at") @db.Timestamptz(6)
+  emailVerifiedAt        DateTime?               @map("email_verified_at")
   systemRole             SystemRole              @default(user) @map("system_role")
   roleBeforeDeactivation SystemRole?             @map("role_before_deactivation")
-  deactivatedAt          DateTime?               @map("deactivated_at") @db.Timestamptz(6)
-  deactivatedById        String?                 @map("deactivated_by_id") @db.Uuid
-  lastSignInAt           DateTime?               @map("last_sign_in_at") @db.Timestamptz(6)
-  createdAt              DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt              DateTime                @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deactivatedAt          DateTime?               @map("deactivated_at")
+  deactivatedById        String?                 @map("deactivated_by_id")
+  lastSignInAt           DateTime?               @map("last_sign_in_at")
+  createdAt              DateTime                @default(now()) @map("created_at")
+  updatedAt              DateTime                @default(now()) @updatedAt @map("updated_at")
   activities             Activity[]
   attachments            Attachment[]
   auditLogEntries        AuditLogEntry[]
@@ -44,23 +44,23 @@ model User {
   workspacesArchivedBy   Workspace[]             @relation("WorkspaceArchivedBy")
   workspacesCreatedBy    Workspace[]             @relation("WorkspaceCreatedBy")
 
-  @@index([id], map: "idx_users_active_super_admin", where: raw("((system_role = 'super_admin'::system_role) AND (deactivated_at IS NULL))"))
+  @@index([id], map: "idx_users_active_super_admin", where: raw("((system_role = 'super_admin') AND (deactivated_at IS NULL))"))
   @@index([deactivatedById], map: "idx_users_deactivated_by_id")
   @@map("users")
 }
 
 /// Has CHECK constraints: see the manual block in the init migration.
 model UserSession {
-  id           String            @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  userId       String            @map("user_id") @db.Uuid
+  id           String            @id @default(uuid(7))
+  userId       String            @map("user_id")
   tokenHash    String            @unique @map("token_hash")
   userAgent    String?           @map("user_agent")
-  ipAddress    String?           @map("ip_address") @db.Inet
-  lastActiveAt DateTime          @default(now()) @map("last_active_at") @db.Timestamptz(6)
-  endedAt      DateTime?         @map("ended_at") @db.Timestamptz(6)
+  ipAddress    String?           @map("ip_address")
+  lastActiveAt DateTime          @default(now()) @map("last_active_at")
+  endedAt      DateTime?         @map("ended_at")
   endReason    SessionEndReason? @map("end_reason")
-  createdAt    DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdAt    DateTime          @default(now()) @map("created_at")
+  updatedAt    DateTime          @default(now()) @updatedAt @map("updated_at")
   user         User              @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([userId, lastActiveAt(sort: Desc)], map: "idx_user_sessions_user_active", where: raw("(ended_at IS NULL)"))
@@ -70,15 +70,15 @@ model UserSession {
 
 /// Has CHECK constraints: see the manual block in the init migration.
 model EmailVerificationCode {
-  id             String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  userId         String    @map("user_id") @db.Uuid
+  id             String    @id @default(uuid(7))
+  userId         String    @map("user_id")
   codeHash       String    @map("code_hash")
-  failedAttempts Int       @default(0) @map("failed_attempts") @db.SmallInt
-  expiresAt      DateTime  @map("expires_at") @db.Timestamptz(6)
-  consumedAt     DateTime? @map("consumed_at") @db.Timestamptz(6)
-  voidedAt       DateTime? @map("voided_at") @db.Timestamptz(6)
-  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  failedAttempts Int       @default(0) @map("failed_attempts")
+  expiresAt      DateTime  @map("expires_at")
+  consumedAt     DateTime? @map("consumed_at")
+  voidedAt       DateTime? @map("voided_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at")
   user           User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([userId], map: "uq_email_verification_codes_live", where: raw("((consumed_at IS NULL) AND (voided_at IS NULL))"))
@@ -87,14 +87,14 @@ model EmailVerificationCode {
 }
 
 model PasswordResetToken {
-  id        String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  userId    String    @map("user_id") @db.Uuid
+  id        String    @id @default(uuid(7))
+  userId    String    @map("user_id")
   tokenHash String    @unique @map("token_hash")
-  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
-  usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
-  voidedAt  DateTime? @map("voided_at") @db.Timestamptz(6)
-  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  voidedAt  DateTime? @map("voided_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at")
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([userId], map: "uq_password_reset_tokens_live", where: raw("((used_at IS NULL) AND (voided_at IS NULL))"))
@@ -103,14 +103,14 @@ model PasswordResetToken {
 }
 
 model AuthThrottle {
-  id          String            @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  id          String            @id @default(uuid(7))
   scope       AuthThrottleScope
   subjectKey  String            @map("subject_key")
-  failedCount Int               @default(0) @map("failed_count") @db.SmallInt
-  lockedUntil DateTime?         @map("locked_until") @db.Timestamptz(6)
-  lastSentAt  DateTime?         @map("last_sent_at") @db.Timestamptz(6)
-  createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  failedCount Int               @default(0) @map("failed_count")
+  lockedUntil DateTime?         @map("locked_until")
+  lastSentAt  DateTime?         @map("last_sent_at")
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @default(now()) @updatedAt @map("updated_at")
 
   @@unique([scope, subjectKey])
   @@map("auth_throttles")

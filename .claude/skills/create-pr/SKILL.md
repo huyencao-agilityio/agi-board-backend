@@ -10,12 +10,12 @@ only a release PR goes `develop` → `main`, and only when the user asks for it.
 
 Every PR belongs to one Trello ticket. The ticket id is the card number on the board, written `#123`.
 
-1. **Ticket.** Get the card number from the user (or the branch name / commits if they carry `#123`).
+1. **Ticket.** Get the card number from the user (or the branch name `<type>/<number>-<slug>` created by `/pull-ticket`, or commits carrying `#123`).
    Read the card with the Trello MCP tools (`trelloSearch` / `trelloReadCard`) to get its **exact name** and
    **URL**. If Trello is not available or the card is not found, ask the user for the name and link.
    Never invent a ticket number, name or link.
 2. **Branch.** Never open a PR from `main` or `develop`. If on one of them, create a branch from `develop`
-   named `<type>/<kebab-slug>` (e.g. `feat/init-structure`, `fix/board-404`); check it with
+   named `<type>/<number>-<slug>` like `/pull-ticket` does (e.g. `feat/123-add-board-route-guards`); check it with
    `sh scripts/check-branch-name.sh` before the first push. Renaming a branch that already heads an open PR
    **closes that PR** (GitHub only retargets PRs whose base is the renamed branch); a new PR is then needed.
    Ask the user before renaming such a branch.
@@ -33,7 +33,7 @@ Every PR belongs to one Trello ticket. The ticket id is the card number on the b
    (`git log origin/develop..HEAD`, `git diff origin/develop...HEAD --stat`):
    - **Ticket**: `[#123](<card URL>)`.
    - **What**: the change in a few bullets.
-   - **Why**: the reason; link the spec (`specs/<NNN>-<slug>/spec.md` in the agi-board repo) if there is one.
+   - **Why**: the reason; link the spec (`specs/<card number>/spec.md` in this repo) if there is one.
    - **How tested**: commands actually run with their result, tests added. Never claim a check that was not run.
    - **Screenshots**: API/UI output if it helps, otherwise `N/A`.
    - **Risk**: what could break; for a migration name the tables touched, whether manual objects

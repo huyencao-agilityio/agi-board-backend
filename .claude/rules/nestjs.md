@@ -28,14 +28,14 @@ Layering, global auth and the error envelope are defined in `AGENTS.md`; this fi
 - Request bodies and queries are classes in `dto/` with `class-validator` decorators; `ValidationPipe` rejects unknown fields. One DTO per operation (`CreateBoardDto`, `UpdateBoardDto`); derive update DTOs with `PartialType` from `@nestjs/swagger`.
 - Bound every string (`@MaxLength`) and number (`@Min`/`@Max`) to the DB CHECK constraints (`../docs/database/schema.sql`, or the `-- manual:` CHECKs in the init migration), so violations return 400 instead of a 500 from the database.
 - Trim user text with `@Transform(({ value }) => typeof value === 'string' ? value.trim() : value)` where the spec trims; normalise emails to lower case.
-- No `id`, `createdAt` or owner fields in create DTOs (ids come from `uuidv7()`; the owner is `@CurrentUser()`).
+- No `id`, `createdAt` or owner fields in create DTOs (ids come from Prisma's `uuid(7)`; the owner is `@CurrentUser()`).
 - Responses: return plain objects built from an explicit Prisma `select`. Never return a raw model row (it may carry hashes or internal fields).
 
 ## Services
 
 - Business rules, permission checks and Prisma calls go here. Load the facts, ask the pure function in `permissions/`, then throw `NotFoundException` (no access) or `ForbiddenException` (visible but not allowed).
 - Throw Nest HTTP exceptions with a stable code: `throw new NotFoundException({ code: 'BOARD_NOT_FOUND', message: 'Board not found' })`. Clients branch on `code`, never on `message`.
-- Multi-step writes run in `this.prisma.$transaction(async (tx) => { ... })`. Real-time events and emails are sent after the transaction resolves, never inside it.
+- Multi-step writes that must be atomic run in one `getBindings().DB.batch([...])` (Prisma's D1 adapter runs `$transaction` (both forms) as separate, non-atomic queries; see `database.md`). Real-time events and emails are sent after it resolves, never inside it.
 - Use `Logger` from `@nestjs/common` (`private readonly logger = new Logger(BoardsService.name)`), which pino handles. No `console.log`.
 
 ## Lists and pagination

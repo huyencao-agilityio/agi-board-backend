@@ -11,7 +11,7 @@ Two layers, both run through pnpm scripts (never `npx jest`, Prisma 7 needs `--e
 | Layer | Files                                | Command         | Database                                                   |
 | ----- | ------------------------------------ | --------------- | ---------------------------------------------------------- |
 | Unit  | `src/**/*.spec.ts`, next to the code | `pnpm test`     | none                                                       |
-| E2E   | `test/*.e2e-spec.ts`                 | `pnpm test:e2e` | `agi_board_test`, migrated by `test/setup/global-setup.ts` |
+| E2E   | `test/*.e2e-spec.ts`                 | `pnpm test:e2e` | local D1 in `.wrangler/e2e`, migrated by `test/setup/global-setup.ts` |
 
 ## What each change needs
 
@@ -39,4 +39,4 @@ Two layers, both run through pnpm scripts (never `npx jest`, Prisma 7 needs `--e
 
 ## Reporting
 
-- Run the commands and read the output. A check counts as passed only when its command exited 0 on the current code. If the database is down and e2e cannot run, say so; never report it as passed.
+- Run the commands and read the output. A check counts as passed only when its command exited 0 on the current code. If e2e cannot run (e.g. wrangler fails to start), say so; never report it as passed.
