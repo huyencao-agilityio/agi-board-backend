@@ -1,0 +1,202 @@
+/// Has CHECK constraints: see the manual block in the init migration.
+/// Has expression indexes: see the manual block in the init migration.
+model Card {
+  id                    String         @id @default(uuid(7))
+  boardId               String         @map("board_id")
+  listId                String         @map("list_id")
+  number                Int
+  title                 String
+  description           String?
+  pos                   Float
+  coverColor            String?        @map("cover_color")
+  startAt               DateTime?      @map("start_at")
+  dueAt                 DateTime?      @map("due_at")
+  reminderOffsetMinutes Int?           @map("reminder_offset_minutes")
+  reminderAt            DateTime?      @map("reminder_at")
+  reminderSentForDue    DateTime?      @map("reminder_sent_for_due")
+  completedAt           DateTime?      @map("completed_at")
+  completedById         String?        @map("completed_by_id")
+  archivedAt            DateTime?      @map("archived_at")
+  archivedById          String?        @map("archived_by_id")
+  createdById           String         @map("created_by_id")
+  createdAt             DateTime       @default(now()) @map("created_at")
+  updatedAt             DateTime       @default(now()) @updatedAt @map("updated_at")
+  activities            Activity[]
+  attachments           Attachment[]
+  cardLabels            CardLabel[]
+  cardLinksSourceCard   CardLink[]     @relation("CardLinkSourceCard")
+  cardLinksTargetCard   CardLink[]     @relation("CardLinkTargetCard")
+  cardMembers           CardMember[]
+  cardWatchers          CardWatcher[]
+  archivedBy            User?          @relation("CardArchivedBy", fields: [archivedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  board                 Board          @relation(fields: [boardId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  completedBy           User?          @relation("CardCompletedBy", fields: [completedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdBy             User           @relation("CardCreatedBy", fields: [createdById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  list                  List           @relation(fields: [listId, boardId], references: [id, boardId], onDelete: NoAction)
+  checklists            Checklist[]
+  comments              Comment[]
+  notifications         Notification[]
+
+  @@unique([boardId, number], map: "uq_cards_board_number")
+  @@index([archivedById], map: "idx_cards_archived_by_id")
+  @@index([boardId, archivedAt(sort: Desc)], map: "idx_cards_board_archived", where: raw("(archived_at IS NOT NULL)"))
+  @@index([boardId], map: "idx_cards_board_id")
+  @@index([completedById], map: "idx_cards_completed_by_id")
+  @@index([createdById], map: "idx_cards_created_by_id")
+  @@index([listId], map: "idx_cards_list_id")
+  @@index([listId, pos], map: "idx_cards_list_pos_active", where: raw("(archived_at IS NULL)"))
+  @@index([reminderAt], map: "idx_cards_reminder_due", where: raw("((reminder_at IS NOT NULL) AND (completed_at IS NULL) AND (archived_at IS NULL))"))
+  @@map("cards")
+}
+
+model CardLabel {
+  id        String   @id @default(uuid(7))
+  cardId    String   @map("card_id")
+  labelId   String   @map("label_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  card      Card     @relation(fields: [cardId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  label     Label    @relation(fields: [labelId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([cardId, labelId])
+  @@index([cardId], map: "idx_card_labels_card_id")
+  @@index([labelId], map: "idx_card_labels_label_id")
+  @@map("card_labels")
+}
+
+model CardMember {
+  id        String   @id @default(uuid(7))
+  cardId    String   @map("card_id")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  card      Card     @relation(fields: [cardId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user      User     @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([cardId, userId])
+  @@index([cardId], map: "idx_card_members_card_id")
+  @@index([userId], map: "idx_card_members_user_id")
+  @@map("card_members")
+}
+
+model CardWatcher {
+  id        String   @id @default(uuid(7))
+  cardId    String   @map("card_id")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  card      Card     @relation(fields: [cardId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user      User     @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([cardId, userId])
+  @@index([cardId], map: "idx_card_watchers_card_id")
+  @@index([userId], map: "idx_card_watchers_user_id")
+  @@map("card_watchers")
+}
+
+/// Has CHECK constraints: see the manual block in the init migration.
+model Checklist {
+  id             String          @id @default(uuid(7))
+  cardId         String          @map("card_id")
+  title          String
+  pos            Float
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @default(now()) @updatedAt @map("updated_at")
+  checklistItems ChecklistItem[]
+  card           Card            @relation(fields: [cardId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([cardId, pos], map: "idx_checklists_card_id")
+  @@map("checklists")
+}
+
+/// Has CHECK constraints: see the manual block in the init migration.
+model ChecklistItem {
+  id          String    @id @default(uuid(7))
+  checklistId String    @map("checklist_id")
+  text        String
+  pos         Float
+  checkedAt   DateTime? @map("checked_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at")
+  checklist   Checklist @relation(fields: [checklistId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([checklistId, pos], map: "idx_checklist_items_checklist_id")
+  @@map("checklist_items")
+}
+
+/// Has CHECK constraints: see the manual block in the init migration.
+/// Has expression indexes: see the manual block in the init migration.
+model CardLink {
+  id           String       @id @default(uuid(7))
+  sourceCardId String       @map("source_card_id")
+  targetCardId String       @map("target_card_id")
+  type         CardLinkType
+  createdById  String       @map("created_by_id")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @default(now()) @updatedAt @map("updated_at")
+  createdBy    User         @relation(fields: [createdById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sourceCard   Card         @relation("CardLinkSourceCard", fields: [sourceCardId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  targetCard   Card         @relation("CardLinkTargetCard", fields: [targetCardId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([createdById], map: "idx_card_links_created_by_id")
+  @@index([sourceCardId], map: "idx_card_links_source_card_id")
+  @@index([targetCardId], map: "idx_card_links_target_card_id")
+  @@map("card_links")
+}
+
+/// Has CHECK constraints: see the manual block in the init migration.
+model Attachment {
+  id               String   @id @default(uuid(7))
+  cardId           String   @map("card_id")
+  uploadedById     String   @map("uploaded_by_id")
+  fileName         String   @map("file_name")
+  contentType      String   @map("content_type")
+  sizeBytes        BigInt   @map("size_bytes")
+  objectKey        String   @unique @map("object_key")
+  previewObjectKey String?  @map("preview_object_key")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at")
+  card             Card     @relation(fields: [cardId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  uploadedBy       User     @relation(fields: [uploadedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([cardId], map: "idx_attachments_card_id")
+  @@index([uploadedById], map: "idx_attachments_uploaded_by_id")
+  @@map("attachments")
+}
+
+/// Has CHECK constraints: see the manual block in the init migration.
+model Comment {
+  id        String    @id @default(uuid(7))
+  cardId    String    @map("card_id")
+  authorId  String    @map("author_id")
+  body      String
+  editedAt  DateTime? @map("edited_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at")
+  author    User      @relation(fields: [authorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  card      Card      @relation(fields: [cardId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([authorId], map: "idx_comments_author_id")
+  @@index([cardId, createdAt(sort: Desc)], map: "idx_comments_card_id")
+  @@map("comments")
+}
+
+/// Has CHECK constraints: see the manual block in the init migration.
+model Activity {
+  id        String       @id @default(uuid(7))
+  boardId   String       @map("board_id")
+  cardId    String?      @map("card_id")
+  actorId   String       @map("actor_id")
+  type      ActivityType
+  data      Json         @default("{}")
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @default(now()) @updatedAt @map("updated_at")
+  actor     User         @relation(fields: [actorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  board     Board        @relation(fields: [boardId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  card      Card?        @relation(fields: [cardId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([actorId], map: "idx_activities_actor_id")
+  @@index([boardId, createdAt(sort: Desc)], map: "idx_activities_board_id")
+  @@index([cardId, createdAt(sort: Desc)], map: "idx_activities_card_id")
+  @@map("activities")
+}

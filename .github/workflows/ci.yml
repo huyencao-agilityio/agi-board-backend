@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # commitlint reads every commit of the PR
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Branch name and commit messages follow the conventions
+        if: github.event_name == 'pull_request'
+        run: |
+          sh scripts/check-branch-name.sh "${{ github.head_ref }}"
+          pnpm exec commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }}
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      # Local D1 through wrangler (Miniflare); no Cloudflare account needed.
+      - run: pnpm test:e2e
+      - name: Migrations match the Prisma schema
+        run: pnpm db:check
+      - name: Migrations and seed apply to an empty database
+        run: pnpm db:migrate && pnpm db:seed && pnpm db:seed
+      - name: Worker bundles (no upload)
+        run: pnpm exec wrangler deploy --dry-run --outdir dist-worker
+
+  # develop -> staging, main -> production; only after every check above passes.
+  deploy:
+    needs: check
+    if: github.event_name == 'push' && (github.ref_name == 'develop' || github.ref_name == 'main')
+    uses: ./.github/workflows/deploy.yml
+    secrets: inherit # Cloudflare secrets live in the staging/production GitHub Environments

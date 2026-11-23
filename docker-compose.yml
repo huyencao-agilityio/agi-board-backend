@@ -1,0 +1,7 @@
+# Local SMTP catcher for email work (`pnpm mail:up`). The API and database run in wrangler (`pnpm start:dev`).
+services:
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports:
+      - '1025:1025' # SMTP
+      - '8025:8025' # web UI
