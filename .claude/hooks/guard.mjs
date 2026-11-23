@@ -11,34 +11,6 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const PROTECTED_BRANCHES = ['main', 'develop'];
-const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]', 'postgres', 'host.docker.internal']);
-const ENV_RANK = { local: 0, test: 0, unknown: 0, staging: 1, remote: 2, production: 3 };
-
-// ---------- database environment ----------
-
-export function classifyDbUrl(url, nodeEnv) {
-  if (nodeEnv === 'production') return 'production';
-  if (!url) return 'unknown';
-  let u;
-  try {
-    u = new URL(url);
-  } catch {
-    return 'unknown';
-  }
-  const host = u.hostname.toLowerCase();
-  const text = `${host}/${u.pathname.slice(1).toLowerCase()}`;
-  if (/prod/.test(text)) return 'production';
-  if (/stag|stg/.test(text)) return 'staging';
-  if (LOCAL_HOSTS.has(host)) return text.endsWith('_test') ? 'test' : 'local';
-  return 'remote';
-}
-
-/** Worst environment the command can reach: URLs written in the command win over .env. */
-function targetEnv(cmd, dotenv) {
-  const nodeEnv = /\bNODE_ENV=['"]?production\b/.test(cmd) ? 'production' : dotenv.NODE_ENV;
-  const urls = cmd.match(/postgres(?:ql)?:\/\/[^\s'"]+/g) ?? [dotenv.DATABASE_URL ?? process.env.DATABASE_URL];
-  return urls.map((u) => classifyDbUrl(u, nodeEnv)).reduce((a, b) => (ENV_RANK[b] > ENV_RANK[a] ? b : a), 'unknown');
-}
 
 // ---------- PreToolUse: Bash ----------
 
@@ -67,9 +39,32 @@ function checkGitPush(seg, ctx) {
   return null;
 }
 
+/** Commands that reach the Cloudflare account (live Workers, remote D1/R2, secrets) instead of local state. */
+function checkWrangler(seg) {
+  if (!/\bwrangler\b|upload-backgrounds\.sh/.test(seg)) return null; // the script runs wrangler with its flags
+  const env = seg.match(/(?:--env|-e)[=\s]+['"]?([\w-]+)/)?.[1];
+  if (/\bwrangler\s+(deploy|versions\s+deploy|rollback|delete)\b/.test(seg) && !/--dry-run\b/.test(seg))
+    return deny(
+      'Deploys, rollbacks and Worker deletes change a live Worker. They run only from .github/workflows/deploy.yml; ask the user.',
+    );
+  if (/\bwrangler\s+secret\b/.test(seg))
+    return deny('`wrangler secret` changes deployed secrets. Ask the user to run it.');
+  if (/\bwrangler\s+(d1\s+(delete|time-travel\s+restore)|r2\s+bucket\s+delete)\b/.test(seg))
+    return deny('This deletes or restores a Cloudflare D1 database / R2 bucket. Ask the user to run it.');
+  if (/\bwrangler\s+(d1\s+create|r2\s+bucket\s+create)\b/.test(seg))
+    return ask('This creates a resource in the Cloudflare account.');
+  if (/--remote\b/.test(seg)) {
+    if (env === 'staging') return ask('This wrangler command reaches the staging D1/R2.');
+    return deny(
+      `This wrangler command reaches ${env ? `the ${env}` : 'a remote'} D1/R2. Only local state may be changed from here; deploys apply migrations.`,
+    );
+  }
+  return null;
+}
+
 /** Returns { decision: 'deny' | 'ask', reason } or null to let the normal permission flow decide. */
 export function checkBash(cmd, ctx = {}) {
-  const { currentBranch = '', dotenv = {}, isTracked = () => false } = ctx;
+  const { currentBranch = '', isTracked = () => false } = ctx;
   const c = cmd.replace(/\d?>&\d|>\s*\/dev\/null/g, ' '); // fd duplication is not a file write
 
   // --- git ---
@@ -105,15 +100,19 @@ export function checkBash(cmd, ctx = {}) {
     return deny('Recursive delete of the repo, home or root is blocked.');
   if (WRITE_OP.test(c)) {
     const migPaths = c.match(/prisma\/migrations[^\s'";|&)]*/g) ?? [];
-    if (migPaths.some((p) => /migration_lock\.toml/.test(p) || /^prisma\/migrations\/?$/.test(p) || isTracked(p)))
+    if (migPaths.some((p) => /^prisma\/migrations\/?$/.test(p) || isTracked(p)))
       return deny('Committed migrations are immutable. Create a new one with `pnpm db:migrate:new <name>`.');
+  }
+
+  // --- cloudflare ---
+  for (const seg of c.split(/&&|\|\||;|\||\n/)) {
+    const r = checkWrangler(seg);
+    if (r) return r;
   }
 
   // --- database ---
   if (/\bprisma\s+migrate\s+reset\b|\bdb:reset\b/.test(c))
-    return deny(
-      '`prisma migrate reset` / `pnpm db:reset` wipe the database. Ask the user to run it (Prisma blocks AI agents too).',
-    );
+    return deny('`pnpm db:reset` / `prisma migrate reset` wipe the local database. Ask the user to run it.');
   if (/\bprisma\s+db\s+push\b/.test(c))
     return deny('`prisma db push` bypasses migrations. Use `pnpm db:migrate:new <name>`.');
   if (
@@ -121,23 +120,13 @@ export function checkBash(cmd, ctx = {}) {
       c,
     )
   )
-    return ask('This deletes the local PostgreSQL volume (all local data).');
+    return ask('This deletes local Docker volumes.');
 
-  const dbWrite =
-    /\bprisma\s+(migrate\s+(deploy|dev|resolve)|db\s+(execute|seed))\b|\bdb:(migrate|migrate:dev|seed)(?![\w:])|\b(psql|pg_restore|dropdb|createdb)\b/;
-  if (dbWrite.test(c)) {
-    const env = targetEnv(c, dotenv);
-    if (env === 'production' || env === 'remote')
-      return deny(
-        `This database command targets a ${env} database. Only local/test databases may be changed from here.`,
-      );
-    if (env === 'staging') return ask('This database command targets a staging database.');
-    const destructiveSql =
-      /\b(drop\s+(database|schema|table|column|index|constraint|type|view)\b|truncate\b|delete\s+from\s+[\w."]+\s*(;|$|['"])|alter\s+table\s+[^;]*\bdrop\b)/i;
-    if (/\bdropdb\b/.test(c) || destructiveSql.test(c)) return ask('Destructive SQL against the local database.');
-    if (/\bprisma\s+migrate\s+resolve\b/.test(c))
-      return ask('`prisma migrate resolve` edits the migration history table.');
-  }
+  // Remote D1 is handled by checkWrangler; this is the local D1.
+  const destructiveSql =
+    /\b(drop\s+(table|column|index|view|trigger)\b|delete\s+from\s+[\w."]+\s*(;|$|['"])|alter\s+table\s+[^;]*\bdrop\b)/i;
+  if (/\bwrangler\s+d1\s+execute\b/.test(c) && destructiveSql.test(c))
+    return ask('Destructive SQL against the local D1.');
   return null;
 }
 
@@ -148,7 +137,6 @@ export function checkFile(rel, ctx = {}) {
   if (rel.startsWith('..') || isAbsolute(rel)) return null;
   if (/(^|\/)\.env(\.[\w.-]+)?$/.test(rel) && !rel.endsWith('.env.example'))
     return deny('.env files hold secrets; edit them by hand. Template changes go in .env.example.');
-  if (rel === 'prisma/migrations/migration_lock.toml') return deny('migration_lock.toml is managed by Prisma.');
   const mig = rel.match(/^prisma\/migrations\/[^/]+/);
   if (mig && isTracked(mig[0]))
     return deny(
@@ -171,44 +159,70 @@ export function checkFile(rel, ctx = {}) {
 
 // ---------- PostToolUse: migration conventions ----------
 
-/** Names of hand-written objects (blocks that start with `-- manual:`) in committed migrations. */
-function manualObjectNames() {
-  const names = new Set();
-  const dir = join(ROOT, 'prisma/migrations');
-  for (const d of existsSync(dir) ? readdirSync(dir) : []) {
-    const f = join(dir, d, 'migration.sql');
-    if (!existsSync(f)) continue;
-    for (const block of readFileSync(f, 'utf8').split(/\n\s*\n/)) {
-      if (!block.trimStart().startsWith('-- manual:')) continue;
-      for (const m of block.matchAll(/\b(?:CONSTRAINT|INDEX)\s+(?:IF\s+NOT\s+EXISTS\s+)?"?(\w+)"?/gi)) names.add(m[1]);
+const MIGRATION_FILE = /^prisma\/migrations\/[^/]+\.sql$/;
+
+/**
+ * Hand-written objects in committed migrations: name -> table. An object is manual when it follows a
+ * `-- manual` comment (inline CHECKs inside CREATE TABLE, or a `-- manual:` block of indexes).
+ */
+export function manualObjects(sqlFiles) {
+  const objects = new Map();
+  for (const sql of sqlFiles) {
+    let table = '';
+    let manual = false;
+    for (const line of sql.split('\n')) {
+      const t = line.trim();
+      const created = t.match(/^CREATE\s+TABLE\s+"?(\w+)"?/i);
+      if (created) table = created[1];
+      if (t.startsWith('-- manual')) manual = true;
+      else if (!t) manual = false;
+      else if (manual && !t.startsWith('--')) {
+        const check = t.match(/^CONSTRAINT\s+"?(\w+)"?\s+CHECK\b/i);
+        if (check) objects.set(check[1], table);
+        const index = t.match(/\bINDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?"?(\w+)"?\s+ON\s+"?(\w+)"?/i);
+        if (index) objects.set(index[1], index[2]);
+        if (/^\);?$/.test(t)) manual = false;
+      }
     }
   }
-  return names;
+  return objects;
 }
 
-export function validateMigration(rel, sql, manualNames = new Set()) {
+function committedManualObjects() {
+  const dir = join(ROOT, 'prisma/migrations');
+  const files = existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith('.sql')) : [];
+  return manualObjects(files.map((f) => readFileSync(join(dir, f), 'utf8')));
+}
+
+export function validateMigration(rel, sql, manual = new Map()) {
   const errors = [];
   const warnings = [];
-  const dir = rel.split('/')[2];
-  if (!/^\d{14}_[a-z0-9_]+$/.test(dir))
+  const file = rel.split('/').pop();
+  if (!/^\d{4}_[a-z0-9_]+\.sql$/.test(file))
     warnings.push(
-      `folder '${dir}' is not <timestamp>_<snake_name>; create migrations with \`pnpm db:migrate:new <name>\`.`,
+      `file '${file}' is not NNNN_<snake_name>.sql; create migrations with \`pnpm db:migrate:new <name>\`.`,
     );
-  if (!sql.trim()) warnings.push('migration.sql is empty.');
-  for (const m of sql.matchAll(/\bDROP\s+(?:INDEX|CONSTRAINT)\s+(?:IF\s+EXISTS\s+)?"?(\w+)"?/gi))
-    if (manualNames.has(m[1]))
+  if (!sql.trim()) warnings.push(`${file} is empty; fill it with \`pnpm db:diff >> ${rel}\`.`);
+  for (const m of sql.matchAll(/\bDROP\s+INDEX\s+(?:IF\s+EXISTS\s+)?"?(\w+)"?/gi))
+    if (manual.has(m[1]))
       errors.push(
-        `drops hand-written object '${m[1]}' (a \`-- manual:\` object). Re-create it at the end of this migration and keep test/schema.e2e-spec.ts in sync.`,
+        `drops hand-written index '${m[1]}' (a \`-- manual\` object). Re-create it in this migration and keep test/schema.e2e-spec.ts in sync.`,
       );
-  const risky = sql.match(
-    /\b(DROP\s+(TABLE|COLUMN|TYPE|SCHEMA)|TRUNCATE|DELETE\s+FROM|ALTER\s+COLUMN\s+[^;]*\bTYPE\b)/gi,
-  );
+  // SQLite cannot alter constraints, so Prisma rebuilds a table (new_x, copy, DROP TABLE x, rename): inline CHECKs are lost.
+  for (const m of sql.matchAll(/\bDROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?"?(\w+)"?/gi)) {
+    const lost = [...manual].filter(([name, table]) => table === m[1] && !sql.includes(`"${name}"`)).map(([n]) => n);
+    if (lost.length)
+      errors.push(
+        `rebuilds table '${m[1]}' without its hand-written objects: ${lost.join(', ')}. Copy them (with \`-- manual\`) into the new table / migration.`,
+      );
+  }
+  const risky = sql.match(/\b(DROP\s+(TABLE|COLUMN)|DELETE\s+FROM)/gi);
   if (risky)
     warnings.push(
-      `contains data-losing statements: ${[...new Set(risky.map((s) => s.toUpperCase().split(/\s+/).slice(0, 2).join(' ')))].join(', ')}. Confirm this is intended.`,
+      `contains data-losing statements: ${[...new Set(risky.map((s) => s.toUpperCase().split(/\s+/).slice(0, 2).join(' ')))].join(', ')}. Confirm this is intended (a Prisma table rebuild copies the rows first).`,
     );
-  if (/\b(CHECK\s*\(|NULLS\s+NOT\s+DISTINCT|DEFERRABLE|USING\s+gin|ON\s+\w+\s*\(\s*lower\()/i.test(sql))
-    warnings.push('adds an object Prisma cannot express: mark it `-- manual:` and add it to test/schema.e2e-spec.ts.');
+  if (/\bCHECK\s*\(|\bINDEX\b[^;]*\bON\s+"?\w+"?\s*\([^;]*\b(lower|ifnull|coalesce|min|max)\s*\(/i.test(sql))
+    warnings.push('adds an object Prisma cannot express: mark it `-- manual` and add it to test/schema.e2e-spec.ts.');
   return { errors, warnings };
 }
 
@@ -265,19 +279,6 @@ function fingerprint() {
     ...untracked,
   ];
   return { hash: h.digest('hex'), files };
-}
-
-function readDotenv() {
-  const out = {};
-  try {
-    for (const line of readFileSync(join(ROOT, '.env'), 'utf8').split('\n')) {
-      const m = line.match(/^\s*([\w.]+)\s*=\s*(.*?)\s*$/);
-      if (m) out[m[1]] = m[2].replace(/^(['"])(.*)\1$/, '$2');
-    }
-  } catch {
-    /* no .env */
-  }
-  return out;
 }
 
 const stateFile = (sid) =>
@@ -339,7 +340,6 @@ async function main(mode) {
   if (mode === 'pre-bash') {
     const r = checkBash(ti.command ?? '', {
       currentBranch: git('rev-parse', '--abbrev-ref', 'HEAD'),
-      dotenv: readDotenv(),
       isTracked,
     });
     if (r) preDecision(r);
@@ -364,11 +364,11 @@ async function main(mode) {
       if (err) errors.push(`prisma format failed (schema invalid):\n${err}`);
       else
         notes.push(
-          'Prisma schema changed: create the migration with `pnpm db:migrate:new <name>`, read the generated SQL, then `pnpm db:check`.',
+          'Prisma schema changed: `pnpm db:migrate:new <name>`, `pnpm db:diff >> <the new file>`, read the SQL, then `pnpm db:migrate` and `pnpm db:check`.',
         );
     }
-    if (/^prisma\/migrations\/[^/]+\/migration\.sql$/.test(rel)) {
-      const v = validateMigration(rel, readFileSync(join(ROOT, rel), 'utf8'), manualObjectNames());
+    if (MIGRATION_FILE.test(rel)) {
+      const v = validateMigration(rel, readFileSync(join(ROOT, rel), 'utf8'), committedManualObjects());
       errors.push(...v.errors.map((e) => `migration ${e}`));
       notes.push(...v.warnings.map((w) => `migration ${w}`));
     }

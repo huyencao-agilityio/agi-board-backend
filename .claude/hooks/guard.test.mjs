@@ -1,12 +1,11 @@
 // Run: node --test .claude/hooks/guard.test.mjs
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { checkBash, checkFile, checksInCommand, classifyDbUrl, requiredChecks, validateMigration } from './guard.mjs';
+import { checkBash, checkFile, checksInCommand, manualObjects, requiredChecks, validateMigration } from './guard.mjs';
 
 const d = (r) => r?.decision ?? 'allow';
-const tracked = (p) => p.startsWith('prisma/migrations/20261120074124_init');
+const tracked = (p) => p === 'prisma/migrations/0001_init.sql';
 const local = {
-  dotenv: { DATABASE_URL: 'postgresql://agi:agi@localhost:5432/agi_board' },
   currentBranch: 'feat/x',
   isTracked: tracked,
 };
@@ -55,60 +54,36 @@ test('file safety via bash', () => {
     'cp .env.local /tmp/a',
     'rm -rf .',
     'rm -rf prisma/migrations',
-    "sed -i 's/a/b/' prisma/migrations/20261120074124_init/migration.sql",
+    "sed -i 's/a/b/' prisma/migrations/0001_init.sql",
   ])
     assert.equal(d(checkBash(c, local)), 'deny', c);
   for (const c of [
     'cat .env.example',
-    'cat prisma/migrations/20261120074124_init/migration.sql 2>&1',
+    'cat prisma/migrations/0001_init.sql 2>&1',
     'rm -rf dist',
     'node -e "process.env.X"',
-    'rm prisma/migrations/20261201000000_new/migration.sql',
+    'rm prisma/migrations/0002_new.sql',
   ])
     assert.equal(d(checkBash(c, local)), 'allow', c);
 });
 
 test('database safety', () => {
-  assert.equal(classifyDbUrl('postgresql://a@localhost/agi_board'), 'local');
-  assert.equal(classifyDbUrl('postgresql://a@localhost/agi_board_test'), 'test');
-  assert.equal(classifyDbUrl('postgresql://a@db.staging.example.com/agi'), 'staging');
-  assert.equal(classifyDbUrl('postgresql://a@prod-db.example.com/agi'), 'production');
-  assert.equal(classifyDbUrl('postgresql://a@10.0.0.5/agi'), 'remote');
-  assert.equal(classifyDbUrl('postgresql://a@localhost/agi', 'production'), 'production');
-
-  for (const c of [
-    'pnpm db:reset',
-    'pnpm prisma migrate reset',
-    'pnpm prisma db push',
-    'DATABASE_URL=postgresql://u@prod.example.com/agi pnpm db:migrate',
-    "psql postgresql://u@10.0.0.5/agi -c 'select 1'",
-  ])
+  for (const c of ['pnpm db:reset', 'pnpm prisma migrate reset', 'pnpm prisma db push'])
     assert.equal(d(checkBash(c, local)), 'deny', c);
-  assert.equal(
-    d(checkBash('pnpm db:migrate', { ...local, dotenv: { DATABASE_URL: 'postgresql://u@rds.amazonaws.com/agi' } })),
-    'deny',
-  );
-  assert.equal(
-    d(checkBash('pnpm db:migrate', { ...local, dotenv: { ...local.dotenv, NODE_ENV: 'production' } })),
-    'deny',
-  );
-  assert.equal(d(checkBash('DATABASE_URL=postgresql://u@db.staging.x/agi pnpm db:seed', local)), 'ask');
   for (const c of [
-    'psql -h localhost -U agi -d agi_board -c "DROP TABLE cards"',
-    'psql -d agi_board -c "TRUNCATE users"',
+    'pnpm exec wrangler d1 execute DB --local --command "DROP TABLE cards"',
+    'pnpm exec wrangler d1 execute DB --local --command "DELETE FROM users"',
     'docker compose down -v',
-    'pnpm prisma migrate resolve --applied x',
   ])
     assert.equal(d(checkBash(c, local)), 'ask', c);
   for (const c of [
-    'pnpm db:up',
     'pnpm db:migrate',
-    'pnpm db:migrate:dev',
     'pnpm db:migrate:new add_x',
+    'pnpm db:diff',
     'pnpm db:seed',
     'pnpm db:check',
     'pnpm test:e2e',
-    'psql -d agi_board -c "select count(*) from users"',
+    'pnpm exec wrangler d1 execute DB --local --command "select count(*) from users"',
     'docker compose down',
   ])
     assert.equal(d(checkBash(c, local)), 'allow', c);
@@ -119,8 +94,7 @@ test('file protection', () => {
   for (const p of [
     '.env',
     '.env.production',
-    'prisma/migrations/migration_lock.toml',
-    'prisma/migrations/20261120074124_init/migration.sql',
+    'prisma/migrations/0001_init.sql',
     'src/generated/prisma/client.ts',
     'pnpm-lock.yaml',
   ])
@@ -137,27 +111,84 @@ test('file protection', () => {
     '.env.example',
     'src/modules/boards/boards.service.ts',
     'prisma/schema/boards.prisma',
-    'prisma/migrations/20261201000000_add_x/migration.sql',
+    'prisma/migrations/0002_add_x.sql',
     '../agi-board-frontend/.env',
   ])
     assert.equal(d(checkFile(p, ctx)), 'allow', p);
 });
 
 test('migration validation', () => {
-  const manual = new Set(['uq_cards_board_number']);
-  const ok = validateMigration(
-    'prisma/migrations/20261201000000_add_x/migration.sql',
-    'ALTER TABLE "cards" ADD COLUMN "x" TEXT;',
-    manual,
+  const init = [
+    'CREATE TABLE "cards" (',
+    '    "id" TEXT NOT NULL PRIMARY KEY,',
+    '    -- manual',
+    '    CONSTRAINT "cards_title_check" CHECK (trim(title) <> \'\')',
+    ');',
+    'CREATE INDEX "idx_cards_list" ON "cards"("list_id");',
+    '',
+    '-- manual: expression indexes',
+    'CREATE INDEX "idx_users_full_name" ON "users" (lower(full_name));',
+  ].join('\n');
+  const manual = manualObjects([init]);
+  assert.deepEqual(
+    [...manual],
+    [
+      ['cards_title_check', 'cards'],
+      ['idx_users_full_name', 'users'],
+    ],
   );
+
+  const ok = validateMigration('prisma/migrations/0002_add_x.sql', 'ALTER TABLE "cards" ADD COLUMN "x" TEXT;', manual);
   assert.deepEqual(ok, { errors: [], warnings: [] });
+
   const bad = validateMigration(
-    'prisma/migrations/my_migration/migration.sql',
-    'ALTER TABLE "cards" DROP CONSTRAINT "uq_cards_board_number";\nDROP TABLE "x";',
+    'prisma/migrations/my-migration.sql',
+    'DROP INDEX "idx_users_full_name";\nCREATE TABLE "new_cards" ("id" TEXT);\nDROP TABLE "cards";',
     manual,
   );
-  assert.equal(bad.errors.length, 1);
-  assert.equal(bad.warnings.length, 2);
+  assert.equal(bad.errors.length, 2); // drops a manual index; table rebuild loses cards_title_check
+  assert.equal(bad.warnings.length, 2); // file name; data-losing statement
+
+  const rebuilt = validateMigration(
+    'prisma/migrations/0003_rebuild_cards.sql',
+    'CREATE TABLE "new_cards" (\n  -- manual\n  CONSTRAINT "cards_title_check" CHECK (trim(title) <> \'\')\n);\nDROP TABLE "cards";',
+    manual,
+  );
+  assert.equal(rebuilt.errors.length, 0);
+});
+
+test('cloudflare safety', () => {
+  for (const c of [
+    'pnpm exec wrangler deploy --env production',
+    'pnpm wrangler deploy',
+    'npx wrangler rollback --env staging',
+    'pnpm exec wrangler versions deploy',
+    'pnpm exec wrangler secret put API_KEY --env staging',
+    'pnpm exec wrangler d1 migrations apply DB --remote --env production',
+    'pnpm exec wrangler d1 execute DB --remote --command "DELETE FROM users"',
+    'pnpm exec wrangler d1 time-travel restore agi-board-production --timestamp 1',
+    'pnpm exec wrangler r2 bucket delete agi-board-images-production',
+    'pnpm exec wrangler d1 delete agi-board-staging',
+    'sh scripts/upload-backgrounds.sh --remote --env production',
+  ])
+    assert.equal(d(checkBash(c, local)), 'deny', c);
+  for (const c of [
+    'pnpm exec wrangler d1 execute DB --remote --env staging --file prisma/seed.sql',
+    'pnpm exec wrangler d1 create agi-board-staging',
+    'pnpm exec wrangler r2 bucket create agi-board-images-staging',
+    'sh scripts/upload-backgrounds.sh --remote --env staging',
+  ])
+    assert.equal(d(checkBash(c, local)), 'ask', c);
+  for (const c of [
+    'pnpm exec wrangler deploy --dry-run --outdir dist-worker',
+    'pnpm exec wrangler deploy --env staging --dry-run',
+    'CI=true wrangler d1 migrations apply DB --local',
+    'pnpm exec wrangler d1 execute DB --local --file prisma/seed.sql',
+    'pnpm start:dev',
+    'pnpm db:seed',
+    'sh scripts/upload-backgrounds.sh --local',
+  ])
+    assert.equal(d(checkBash(c, local)), 'allow', c);
 });
 
 test('which checks count as run', () => {

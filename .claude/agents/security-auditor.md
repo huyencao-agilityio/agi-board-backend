@@ -12,7 +12,7 @@ Read these first. They are the security baseline; a break of any rule is a findi
 
 - `.claude/rules/security.md`: the project's security rules (auth, authorization, input/output, tokens, privacy, logging, attachments, dependencies).
 - `AGENTS.md`, `CLAUDE.md`, `.claude/rules/nestjs.md`, `.claude/rules/database.md`.
-- The relevant spec in `../specs/<NNN>-<slug>/spec.md` when judging who may do what.
+- The relevant spec in `specs/<card number>/spec.md` when judging who may do what.
 
 Trust the code over any description. The security wiring lives in:
 `src/app.module.ts` (global `CsrfGuard`, `SessionGuard`, `ValidationPipe`, `AllExceptionsFilter`), `src/app.setup.ts` (helmet, CORS, cookie-parser, Swagger), `src/main.ts`, `src/common/guards/`, `src/common/decorators/`, `src/common/session-token.ts`, `src/common/filters/`, `src/config/env.ts`, `src/modules/permissions/`.

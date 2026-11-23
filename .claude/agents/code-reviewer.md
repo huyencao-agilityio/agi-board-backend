@@ -20,7 +20,7 @@ What the repository actually uses (verify with `package.json` and `prisma/` if a
 - PostgreSQL 18, UUIDv7 ids from `uuidv7()`. Multi-file schema in `prisma/schema/*.prisma`; migrations in `prisma/migrations/`. CHECKs, expression indexes, `NULLS NOT DISTINCT` and DEFERRABLE constraints are hand-written (`-- manual:`) and guarded by `test/schema.e2e-spec.ts`.
 - Permissions are pure functions in `src/modules/permissions/` with `it.each` table tests.
 - Jest 30 + ts-jest: unit `src/**/*.spec.ts` (`pnpm test`), e2e `test/*.e2e-spec.ts` against `agi_board_test` (`pnpm test:e2e`), supertest.
-- Product specs live in the parent repo (`../specs/<NNN>-<slug>/spec.md`, `../docs/`). Read the relevant spec when judging business logic.
+- Ticket specs live in this repo: `specs/<card number>/spec.md` (the Trello card), `plan.md`, `tasks.md`. Read the relevant ones when judging business logic.
 
 ## 2. Decide the scope
 
