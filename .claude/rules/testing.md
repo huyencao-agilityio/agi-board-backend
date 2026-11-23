@@ -26,7 +26,7 @@ Two layers, both run through pnpm scripts (never `npx jest`, Prisma 7 needs `--e
 
 - Build the app like production: `Test.createTestingModule({ imports: [AppModule] })`, then `setupApp(app)` and `app.init()`. Do not re-wire guards, pipes or the filter by hand.
 - Use the real database through `PrismaService`; do not mock Prisma in e2e tests.
-- Sign in by creating a user with a session row (the `signedIn()` helper pattern in `test/app.e2e-spec.ts`) until the auth endpoints exist; then prefer the real sign-in flow.
+- Tests of the auth endpoints use the real `POST /auth/sign-in` (see `test/auth.e2e-spec.ts`). Tests of other features sign in by creating a user with a session row (the `signedIn()` helper pattern in `test/app.e2e-spec.ts`), which is faster because it skips the password hash.
 - Writes send both the `csrf_token` cookie and the `X-CSRF-Token` header.
 - Isolation: test data uses addresses under `@e2e.test` (or another per-file marker) and each file deletes its own rows in `beforeEach`/`afterAll`. Tests must pass in any order and when run alone.
 - Assert status, `error.code` and the response shape. Do not assert on human-readable `message` text.

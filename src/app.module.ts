@@ -4,10 +4,12 @@ import { APP_FILTER, APP_GUARD, APP_PIPE } from '@nestjs/core';
 import { LoggerModule } from 'nestjs-pino';
 import { randomUUID } from 'node:crypto';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { serializeRequest } from './common/request-log';
 import { CsrfGuard } from './common/guards/csrf.guard';
 import { SessionGuard } from './common/guards/session.guard';
 import { Env, validateEnv } from './config/env';
 import { DatabaseModule } from './database/database.module';
+import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
 
 @Module({
@@ -24,10 +26,12 @@ import { HealthModule } from './modules/health/health.module';
             return id;
           },
           redact: ['req.headers.cookie', 'req.headers.authorization', 'res.headers["set-cookie"]'],
+          serializers: { req: serializeRequest },
         },
       }),
     }),
     DatabaseModule,
+    AuthModule,
     HealthModule,
   ],
   providers: [
