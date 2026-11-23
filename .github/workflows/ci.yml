@@ -34,3 +34,10 @@ jobs:
         run: pnpm db:migrate && pnpm db:seed && pnpm db:seed
       - name: Worker bundles (no upload)
         run: pnpm exec wrangler deploy --dry-run --outdir dist-worker
+
+  # develop -> staging, main -> production; only after every check above passes.
+  deploy:
+    needs: check
+    if: github.event_name == 'push' && (github.ref_name == 'develop' || github.ref_name == 'main')
+    uses: ./.github/workflows/deploy.yml
+    secrets: inherit # Cloudflare secrets live in the staging/production GitHub Environments
