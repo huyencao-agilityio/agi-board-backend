@@ -325,6 +325,34 @@ describe('Auth sign-in (e2e)', () => {
       await signIn({ email: 'g@auth.e2e.test', password }).expect(401);
     });
 
+    it('does not link when the account was verified meanwhile: its password and session survive', async () => {
+      const existing = await makeUser('g@auth.e2e.test', { emailVerifiedAt: null });
+      const original = prisma.userSession.updateMany.bind(prisma.userSession);
+      // Runs between Google's read and its link, where a verification can slip in.
+      jest.spyOn(prisma.userSession, 'updateMany').mockImplementationOnce(((args: Parameters<typeof original>[0]) =>
+        original(args).then(async (result) => {
+          await prisma.user.update({ where: { id: existing.id }, data: { emailVerifiedAt: new Date() } });
+          await openSession(existing.id, 'verified-meanwhile-token');
+          return result;
+        })) as never);
+      const res = await callback({ code: 'c' });
+      expect(res.headers.location).toBe(`${origin}/sign-in?error=google_failed`);
+      expect(sessionCookie(res)).toBeUndefined();
+      expect(await prisma.user.findUniqueOrThrow({ where: { id: existing.id } })).toMatchObject({
+        googleSubject: null,
+        passwordHash,
+      });
+      expect(await prisma.userSession.count({ where: { userId: existing.id, endedAt: null } })).toBe(1);
+    });
+
+    it('refuses an email already linked to another Google account', async () => {
+      const existing = await makeUser('g@auth.e2e.test', { googleSubject: 'e2e-other-subject' });
+      const res = await callback({ code: 'c' });
+      expect(res.headers.location).toBe(`${origin}/sign-in?error=google_failed`);
+      expect(sessionCookie(res)).toBeUndefined();
+      expect(await prisma.userSession.count({ where: { userId: existing.id } })).toBe(0);
+    });
+
     it('accepts an account of any email domain', async () => {
       nextIdToken = idToken({ email: 'someone@gmail.com', sub: 'other-sub' });
       const res = await callback({ code: 'c' });

@@ -118,6 +118,7 @@ description: "Task list for #5 Implement feature User Sign Up (backend)"
 - [X] T024 Review the diff with the `code-reviewer` and `security-auditor` definitions in `.claude/agents/`, when the user asks for it; record findings in `specs/5/plan.md`. Needs T022.
 - [ ] T025 After the staging deploy: check that the code email arrives (background sending, research R2) and that sign-up, verify and sign-in do not hit error 1102 (CPU); record the result in `specs/5/research.md`. Needs T021 and the merge.
 - [X] T026 Fix the review findings R1, R3, R5, R7, R8, R9 of `specs/5/plan.md`. They change T006, T011, T013 and T016: one `claim` for every email, no `start`/`claimResend`/`clear`, password set by `verify-email`. The unverified sign-in cases of T014 live in `test/sign-up.e2e-spec.ts`.
+- [X] T027 Add race tests for the paths coverage showed missing: Google link against verification, another Google account on the same email, verification against a changed account, sign-up against Google or a verification (`test/auth.e2e-spec.ts`, `test/sign-up.e2e-spec.ts`).
 
 ---
 

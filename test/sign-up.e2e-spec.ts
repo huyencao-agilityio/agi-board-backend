@@ -82,6 +82,8 @@ describe('Sign up and email verification (e2e)', () => {
     noticesSent = [];
   });
 
+  afterEach(() => jest.restoreAllMocks());
+
   afterAll(async () => {
     await cleanUp();
     await app.close();
@@ -218,6 +220,36 @@ describe('Sign up and email verification (e2e)', () => {
       await verify(lastCode()).expect(200);
     });
 
+    it('changes and sends nothing when Google takes the account over after the lookup', async () => {
+      await makeUser(email, { emailVerifiedAt: null });
+      const verification = app.get(EmailVerificationService);
+      const original = verification.claim.bind(verification);
+      jest.spyOn(verification, 'claim').mockImplementationOnce(async (to) => {
+        const claimed = await original(to);
+        await prisma.user.update({
+          where: { email },
+          data: { passwordHash: null, googleSubject: 'signup-e2e-google', emailVerifiedAt: new Date() },
+        });
+        return claimed;
+      });
+      expect((await signUp().expect(201)).body).toEqual({ next: 'verify-email' });
+      expect(await findUser()).toMatchObject({ passwordHash: null, fullName: 'Old Name' });
+      expect(codesSent.length + noticesSent.length).toBe(0);
+    });
+
+    it('does not replace the password of an account verified at the last moment', async () => {
+      await makeUser(email, { emailVerifiedAt: null });
+      const original = prisma.user.findUniqueOrThrow.bind(prisma.user);
+      jest.spyOn(prisma.user, 'findUniqueOrThrow').mockImplementationOnce(((args: Parameters<typeof original>[0]) =>
+        original(args).then(async (user) => {
+          await prisma.user.update({ where: { email }, data: { emailVerifiedAt: new Date() } });
+          return user;
+        })) as never);
+      await signUp().expect(201);
+      expect(await findUser()).toMatchObject({ passwordHash, fullName: 'Old Name' });
+      expect(codesSent).toHaveLength(0);
+    });
+
     it('still creates the account when a stranger used up the attempts; a resend then works', async () => {
       await resend().expect(200);
       for (let i = 0; i < 5; i++) await verify('000000').expect(400);
@@ -314,6 +346,28 @@ describe('Sign up and email verification (e2e)', () => {
       spy.mockRestore();
       await signIn(oldPassword).expect(401);
       await signIn(password).expect(200);
+    });
+
+    it.each([
+      ['verified', () => ({ emailVerifiedAt: new Date() })],
+      ['deactivated', () => ({ deactivatedAt: new Date() })],
+      ['taken over by Google', () => ({ passwordHash: null, googleSubject: 'signup-e2e-google' })],
+    ])('gives no session when the account is %s while the code is checked', async (_name, change) => {
+      await signUp();
+      const { id } = await findUser();
+      const verification = app.get(EmailVerificationService);
+      const original = verification.consume.bind(verification);
+      jest.spyOn(verification, 'consume').mockImplementationOnce(async (userId, code) => {
+        const ok = await original(userId, code);
+        await prisma.user.update({ where: { id: userId }, data: change() });
+        return ok;
+      });
+      const before = (await findUser()).passwordHash;
+      const res = await verify(lastCode(), email, 'fresh horse battery 3').expect(400);
+      expect(res.body.error.code).toBe('INCORRECT_CODE');
+      expect(sessionCookie(res)).toBeUndefined();
+      expect(await prisma.userSession.count({ where: { userId: id } })).toBe(0);
+      expect([before, null]).toContain((await findUser()).passwordHash);
     });
 
     it('rejects a weak password without counting an attempt', async () => {
