@@ -28,6 +28,9 @@ describe('Auth sign-in (e2e)', () => {
       data: { email, fullName: 'E2E User', passwordHash, emailVerifiedAt: new Date(), ...data },
     });
 
+  const openSession = (userId: string, token: string) =>
+    prisma.userSession.create({ data: { userId, tokenHash: hashSessionToken(token) } });
+
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
@@ -77,10 +80,11 @@ describe('Auth sign-in (e2e)', () => {
       expect(await prisma.userSession.count({ where: { tokenHash: token } })).toBe(0);
     });
 
-    it('answers 200 with next verify-email for an unverified user', async () => {
-      await makeUser('unverified@auth.e2e.test', { emailVerifiedAt: null });
+    it('answers 200 with next verify-email and no session for an unverified user', async () => {
+      const user = await makeUser('unverified@auth.e2e.test', { emailVerifiedAt: null });
       const res = await signIn({ email: 'unverified@auth.e2e.test', password }).expect(200);
       expect(res.body.next).toBe('verify-email');
+      expect(await prisma.userSession.count({ where: { userId: user.id } })).toBe(0);
     });
 
     it('answers identically for a wrong password, an unknown email and a Google-only account', async () => {
@@ -177,9 +181,12 @@ describe('Auth sign-in (e2e)', () => {
     });
 
     it('says verify-email for a user whose email is not verified yet', async () => {
-      await makeUser('me2@auth.e2e.test', { emailVerifiedAt: null });
-      const cookie = cookieOf(await signIn({ email: 'me2@auth.e2e.test', password }).expect(200));
-      const res = await request(app.getHttpServer()).get('/api/v1/auth/me').set('Cookie', cookie).expect(200);
+      const user = await makeUser('me2@auth.e2e.test', { emailVerifiedAt: null });
+      await openSession(user.id, 'me2-token');
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/auth/me')
+        .set('Cookie', 'agi_sid=me2-token')
+        .expect(200);
       expect(res.body.next).toBe('verify-email');
     });
   });
@@ -290,6 +297,7 @@ describe('Auth sign-in (e2e)', () => {
       expect(user).toMatchObject({ passwordHash: null, googleSubject: 'google-e2e-sub', fullName: 'Google User' });
       expect(user.emailVerifiedAt).not.toBeNull();
       expect(await prisma.userSession.count({ where: { userId: user.id } })).toBe(1);
+      expect(await prisma.emailVerificationCode.count({ where: { userId: user.id } })).toBe(0);
     });
 
     it('merges into a verified password account with the same email, silently, and keeps its password', async () => {
@@ -305,7 +313,7 @@ describe('Auth sign-in (e2e)', () => {
     it('drops the password and ends the sessions of an unverified account when Google links to it', async () => {
       // Someone may have registered this email without proving they own it; only the Google owner keeps access.
       const existing = await makeUser('g@auth.e2e.test', { emailVerifiedAt: null });
-      await signIn({ email: 'g@auth.e2e.test', password }).expect(200);
+      await openSession(existing.id, 'pre-hijack-token');
       const res = await callback({ code: 'c' });
       expect(res.headers.location).toBe(`${origin}/home`);
       const merged = await prisma.user.findUniqueOrThrow({ where: { id: existing.id } });

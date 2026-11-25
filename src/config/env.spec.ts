@@ -28,17 +28,26 @@ describe('validateEnv', () => {
     expect(validateEnv(valid).GOOGLE_CLIENT_ID).toBeUndefined();
   });
 
-  it('requires the Google variables in production', () => {
-    expect(() => validateEnv({ ...valid, NODE_ENV: 'production' })).toThrow(/GOOGLE_CLIENT_ID/);
-    expect(
-      validateEnv({
-        ...valid,
-        NODE_ENV: 'production',
-        GOOGLE_CLIENT_ID: 'id',
-        GOOGLE_CLIENT_SECRET: 'secret',
-        GOOGLE_REDIRECT_URI: 'https://app.example.com/api/v1/auth/google/callback',
-      }).GOOGLE_CLIENT_ID,
-    ).toBe('id');
+  it('does not require the email variables outside production', () => {
+    expect(validateEnv(valid).EMAIL_API_KEY).toBeUndefined();
+    expect(validateEnv(valid).EMAIL_FROM).toBeUndefined();
+    expect(() => validateEnv({ ...valid, EMAIL_API_KEY: 'key' })).toThrow(/EMAIL_FROM/);
+  });
+
+  it('requires the Google and email variables in production', () => {
+    const production: Record<string, string> = {
+      ...valid,
+      NODE_ENV: 'production',
+      GOOGLE_CLIENT_ID: 'id',
+      GOOGLE_CLIENT_SECRET: 'secret',
+      GOOGLE_REDIRECT_URI: 'https://app.example.com/api/v1/auth/google/callback',
+      EMAIL_API_KEY: 'key',
+      EMAIL_FROM: 'AGI Board <no-reply@example.com>',
+    };
+    expect(validateEnv(production).GOOGLE_CLIENT_ID).toBe('id');
+    for (const key of ['GOOGLE_CLIENT_ID', 'EMAIL_API_KEY', 'EMAIL_FROM']) {
+      expect(() => validateEnv({ ...production, [key]: undefined })).toThrow(new RegExp(key));
+    }
   });
 
   it('defaults PASSWORD_PBKDF2_ITERATIONS to 10000 and rejects a very low value', () => {

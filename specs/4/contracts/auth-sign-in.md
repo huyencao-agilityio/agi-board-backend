@@ -15,7 +15,7 @@ Request:
 | Case | Status | Body / `error.code` | Notes |
 |------|--------|---------------------|-------|
 | Valid, verified, active | 200 | `{ "user": { "id", "email", "fullName", "systemRole" }, "next": "home" }` | Sets session cookie. Frontend goes to `/home` (WEB-03) |
-| Valid, email not verified | 200 | same, `"next": "verify-email"` | Sets session cookie. Frontend goes to `/verify-email` (WEB-16), no error |
+| Valid, email not verified | 200 | same, `"next": "verify-email"` | Changed by #5: no session cookie, a code is emailed; see `specs/5/contracts/auth-sign-up.md`. Frontend goes to `/verify-email` (WEB-16), no error |
 | Unknown email, wrong password, or Google-only account | 401 | `INVALID_CREDENTIALS`, "Email or password is incorrect." | Identical for all three |
 | Correct credentials, deactivated | 403 | `ACCOUNT_DEACTIVATED`, "This account has been deactivated. Contact your administrator." | With a wrong password the 401 above is returned instead |
 | Locked (5 failures, 15 min) | 429 | `SIGN_IN_LOCKED`, "Too many attempts. Try again in 15 minutes." (proposed) | Attempt not counted; same for unknown emails |

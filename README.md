@@ -78,7 +78,7 @@ Then set `APP_ORIGIN` in `wrangler.jsonc` `env.staging.vars`, and in GitHub → 
 | `CLOUDFLARE_API_TOKEN`  | API token with Workers Scripts: Edit, D1: Edit, Workers R2 Storage: Edit |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account id                                                    |
 
-Runtime secrets (none yet) go in with `pnpm exec wrangler secret put <NAME> --env <env>`, never in `vars`.
+Runtime secrets (`GOOGLE_CLIENT_SECRET`, `EMAIL_API_KEY`) go in with `pnpm exec wrangler secret put <NAME> --env <env>`, never in `vars`.
 Rollback: `pnpm exec wrangler rollback --env <env>` for code; D1 Time Travel (`wrangler d1 time-travel restore`)
 for data.
 

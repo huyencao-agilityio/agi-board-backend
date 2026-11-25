@@ -1,12 +1,7 @@
-import { Transform } from 'class-transformer';
-import { IsEmail, IsNotEmpty, IsString, MaxLength } from 'class-validator';
+import { IsNotEmpty, IsString, MaxLength } from 'class-validator';
+import { EmailDto } from './email.dto';
 
-export class SignInDto {
-  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim().toLowerCase() : value))
-  @IsEmail()
-  @MaxLength(254)
-  email!: string;
-
+export class SignInDto extends EmailDto {
   // No strength rules at sign-in; the cap only bounds the hashing cost.
   @IsString()
   @IsNotEmpty()
