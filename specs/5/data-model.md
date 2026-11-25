@@ -15,9 +15,8 @@ Existing email at sign-up:
 
 | Account | Result |
 |---------|--------|
-| Has a password, verified or deactivated (also linked to Google) | Nothing changes; the owner is emailed; same response as a new sign-up |
+| Verified, Google-only or deactivated | 409 `EMAIL_ALREADY_EXISTS`, nothing changes |
 | Has a password, unverified and active | `passwordHash` and `fullName` replaced, old code voided, new code emailed; same response as a new sign-up |
-| Google only | 409 `GOOGLE_ONLY_EMAIL`, nothing changes |
 
 ## EmailVerificationCode (`email_verification_codes`)
 
@@ -42,7 +41,7 @@ States: live → consumed, voided or expired. At most one live code per user (`u
 
 | Event | Row absent | Row present |
 |-------|------------|-------------|
-| Sign-up, any email except Google-only | create | restart if older than 60 s, else leave and send nothing (a new user is still created) |
+| Sign-up, new or unverified email | create | restart if older than 60 s, else leave and send nothing (a new user is still created) |
 | Resend, any email | create | restart if older than 60 s, else 429 |
 | Sign-in, correct password, unverified | create | restart if older than 60 s, else leave |
 | Verify attempt | `CODE_EXPIRED` | expired, locked, or count + 1 and compare |

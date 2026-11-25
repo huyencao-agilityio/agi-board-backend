@@ -18,7 +18,6 @@ describe('Sign up and email verification (e2e)', () => {
   let prisma: PrismaService;
   let passwordHash: string;
   let codesSent: { to: EmailRecipient; code: string }[] = [];
-  let noticesSent: EmailRecipient[] = [];
   const csrf = 'test-csrf-token';
   const oldPassword = 'old horse battery 1';
   const password = 'fresh horse battery 2';
@@ -55,7 +54,7 @@ describe('Sign up and email verification (e2e)', () => {
   const sessionCookie = (res: request.Response) =>
     (res.headers['set-cookie'] as unknown as string[] | undefined)?.find((c) => c.startsWith('agi_sid='));
 
-  const emails = ['new', 'verified', 'unverified', 'off', 'google', 'ghost'].map((name) => `${name}${domain}`);
+  const emails = ['new', 'verified', 'unverified', 'ghost'].map((name) => `${name}${domain}`);
   const cleanUp = async () => {
     await prisma.user.deleteMany({ where: { email: { endsWith: domain } } });
     await prisma.authThrottle.deleteMany({ where: { subjectKey: { in: emails.map(subjectKey) } } });
@@ -66,7 +65,6 @@ describe('Sign up and email verification (e2e)', () => {
       .overrideProvider(EmailService)
       .useValue({
         sendVerificationCode: (to: EmailRecipient, code: string) => codesSent.push({ to, code }),
-        sendAccountExists: (to: EmailRecipient) => noticesSent.push(to),
       })
       .compile();
     app = moduleRef.createNestApplication();
@@ -79,7 +77,6 @@ describe('Sign up and email verification (e2e)', () => {
   beforeEach(async () => {
     await cleanUp();
     codesSent = [];
-    noticesSent = [];
   });
 
   afterEach(() => jest.restoreAllMocks());
@@ -111,16 +108,25 @@ describe('Sign up and email verification (e2e)', () => {
 
     it.each([
       ['verified', {}],
-      ['off', { deactivatedAt: new Date(), emailVerifiedAt: null }],
-    ])('answers the same for a %s password account, changes nothing and tells the owner', async (name, data) => {
-      const to = `${name}${domain}`;
-      const before = await makeUser(to, data);
-      const res = await signUp({ email: to }).expect(201);
-      expect(res.body).toEqual({ next: 'verify-email' });
+      ['verified and linked to Google', { googleSubject: 'signup-e2e-google' }],
+      ['Google-only', { passwordHash: null, googleSubject: 'signup-e2e-google' }],
+      ['deactivated', { deactivatedAt: new Date() }],
+      ['deactivated before verifying', { deactivatedAt: new Date(), emailVerifiedAt: null }],
+    ])('refuses an existing %s account and changes nothing', async (_name, data) => {
+      const before = await makeUser(email, data);
+      const res = await signUp().expect(409);
+      expect(res.body.error.code).toBe('EMAIL_ALREADY_EXISTS');
       expect(sessionCookie(res)).toBeUndefined();
-      expect(await findUser(to)).toEqual(before);
+      expect(await findUser()).toEqual(before);
+      expect(await throttleRow()).toBeNull();
       expect(codesSent).toHaveLength(0);
-      expect(noticesSent).toEqual([expect.objectContaining({ email: to })]);
+    });
+
+    it('refuses to sign up again right after the email was verified', async () => {
+      await signUp();
+      await verify(lastCode()).expect(200);
+      expect((await signUp().expect(409)).body.error.code).toBe('EMAIL_ALREADY_EXISTS');
+      expect(codesSent).toHaveLength(1);
     });
 
     it('replaces the password and name of an unverified account and sends a new code', async () => {
@@ -137,30 +143,14 @@ describe('Sign up and email verification (e2e)', () => {
       const old = await prisma.emailVerificationCode.findFirst({ where: { userId: user.id, codeHash: 'old' } });
       expect(old?.voidedAt).not.toBeNull();
       expect(codesSent).toHaveLength(1);
-      expect(noticesSent).toHaveLength(0);
     });
 
-    it('changes and sends nothing when repeated within 60 seconds, whatever the account', async () => {
-      await makeUser(`verified${domain}`);
-      await makeUser(`unverified${domain}`, { emailVerifiedAt: null });
-      for (const to of [email, `verified${domain}`, `unverified${domain}`]) {
-        await signUp({ email: to }).expect(201);
-        const before = await findUser(to);
-        const mails = codesSent.length + noticesSent.length;
-        const res = await signUp({ email: to, password: 'another horse 3' }).expect(201);
-        expect(res.body).toEqual({ next: 'verify-email' });
-        expect(await findUser(to)).toEqual(before);
-        expect(codesSent.length + noticesSent.length).toBe(mails);
-      }
-    });
-
-    it('refuses an email that only uses Google', async () => {
-      const to = `google${domain}`;
-      const before = await makeUser(to, { passwordHash: null, googleSubject: 'signup-e2e-google' });
-      const res = await signUp({ email: to }).expect(409);
-      expect(res.body.error.code).toBe('GOOGLE_ONLY_EMAIL');
-      expect(await findUser(to)).toEqual(before);
-      expect(codesSent.length + noticesSent.length).toBe(0);
+    it('changes and sends nothing when repeated within 60 seconds before verification', async () => {
+      await signUp().expect(201);
+      const before = await findUser();
+      expect((await signUp({ password: 'another horse 3' }).expect(201)).body).toEqual({ next: 'verify-email' });
+      expect(await findUser()).toEqual(before);
+      expect(codesSent).toHaveLength(1);
     });
 
     it.each([
@@ -232,9 +222,9 @@ describe('Sign up and email verification (e2e)', () => {
         });
         return claimed;
       });
-      expect((await signUp().expect(201)).body).toEqual({ next: 'verify-email' });
+      await signUp().expect(409);
       expect(await findUser()).toMatchObject({ passwordHash: null, fullName: 'Old Name' });
-      expect(codesSent.length + noticesSent.length).toBe(0);
+      expect(codesSent).toHaveLength(0);
     });
 
     it('does not replace the password of an account verified at the last moment', async () => {
@@ -245,7 +235,7 @@ describe('Sign up and email verification (e2e)', () => {
           await prisma.user.update({ where: { email }, data: { emailVerifiedAt: new Date() } });
           return user;
         })) as never);
-      await signUp().expect(201);
+      await signUp().expect(409);
       expect(await findUser()).toMatchObject({ passwordHash, fullName: 'Old Name' });
       expect(codesSent).toHaveLength(0);
     });
@@ -258,18 +248,6 @@ describe('Sign up and email verification (e2e)', () => {
       await age(60);
       await resend().expect(200);
       await verify(lastCode()).expect(200);
-    });
-
-    it('answers the same for a name that is not valid Unicode, whatever the account', async () => {
-      await makeUser(`verified${domain}`);
-      const raw = (to: string) =>
-        request(app.getHttpServer())
-          .post('/api/v1/auth/sign-up')
-          .set('Cookie', `csrf_token=${csrf}`)
-          .set('X-CSRF-Token', csrf)
-          .set('Content-Type', 'application/json')
-          .send(`{"email":"${to}","password":"${password}","fullName":"a\\ud800"}`);
-      expect((await raw(email)).status).toBe((await raw(`verified${domain}`)).status);
     });
   });
 
@@ -409,9 +387,10 @@ describe('Sign up and email verification (e2e)', () => {
       expect((await verify(code).expect(400)).body.error.code).toBe('VALIDATION_FAILED');
     });
 
-    it('answers the same for a verified account and for a new one', async () => {
+    it('answers the same for a verified account and for an unverified one', async () => {
       const verified = `verified${domain}`;
       await makeUser(verified);
+      await makeUser(email, { emailVerifiedAt: null });
       const trace = async (to: string) => {
         const out: unknown[] = [];
         const record = async (req: request.Test) => {
@@ -420,8 +399,7 @@ describe('Sign up and email verification (e2e)', () => {
         };
         const guess = () => (codesSent.length ? wrong(lastCode()) : '123456');
         await record(verify(guess(), to));
-        await record(signUp({ email: to }));
-        await record(signUp({ email: to }));
+        await record(resend(to));
         await record(resend(to));
         for (let i = 0; i < 6; i++) await record(verify(guess(), to));
         await age(60, to);

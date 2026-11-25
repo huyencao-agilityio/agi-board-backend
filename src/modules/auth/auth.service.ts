@@ -12,6 +12,7 @@ import { setSessionCookie } from '../../common/session-cookie';
 import { hashSessionToken, newSessionToken } from '../../common/session-token';
 import type { Env } from '../../config/env';
 import { PrismaService } from '../../database/prisma.service';
+import type { User } from '../../generated/prisma/client';
 import type { SystemRole } from '../../generated/prisma/enums';
 import { EmailService, type EmailRecipient } from '../email/email.service';
 import type { ResendCodeDto } from './dto/resend-code.dto';
@@ -36,6 +37,17 @@ export interface SignInResult {
   /** Where the frontend goes next: `home` is WEB-03, `verify-email` is WEB-16. */
   next: 'home' | 'verify-email';
 }
+
+/** A password account whose email nobody has proven to own yet. */
+function awaitsVerification(user: Pick<User, 'passwordHash' | 'emailVerifiedAt' | 'deactivatedAt'>) {
+  return !!user.passwordHash && !user.emailVerifiedAt && !user.deactivatedAt;
+}
+
+const emailAlreadyExists = () =>
+  new ConflictException({
+    code: 'EMAIL_ALREADY_EXISTS',
+    message: 'An account with this email already exists. Sign in instead.',
+  });
 
 @Injectable()
 export class AuthService {
@@ -91,21 +103,18 @@ export class AuthService {
     return this.createSession(user, req, res);
   }
 
-  /** Same answer for a new email and for one with a password account; nothing is signed in before verification. */
+  /**
+   * Creates an unverified account, or lets an unverified one sign up again. Any other existing account (verified,
+   * Google-only or deactivated) is refused: the owner chose a clear message over hiding accounts (plan.md D9).
+   */
   async signUp(dto: SignUpDto): Promise<{ next: 'verify-email' }> {
-    // Before the lookup, so every case pays for it.
-    const passwordHash = await this.passwords.hash(dto.password);
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email },
-      select: { passwordHash: true },
+      select: { passwordHash: true, emailVerifiedAt: true, deactivatedAt: true },
     });
-    if (user && !user.passwordHash) {
-      throw new ConflictException({
-        code: 'GOOGLE_ONLY_EMAIL',
-        message: 'This email uses Google sign-in. Use "Continue with Google" instead.',
-      });
-    }
+    if (user && !awaitsVerification(user)) throw emailAlreadyExists();
 
+    const passwordHash = await this.passwords.hash(dto.password);
     // Before the user is created, so a parallel sign-up that finds the user is refused here.
     const claimed = await this.verification.claim(dto.email);
     const created = user ? null : await this.createUnverifiedUser(dto, passwordHash);
@@ -176,7 +185,7 @@ export class AuthService {
       where: { email: dto.email },
       select: { id: true, email: true, passwordHash: true, emailVerifiedAt: true, deactivatedAt: true },
     });
-    if (user?.passwordHash && !user.emailVerifiedAt && !user.deactivatedAt) await this.sendCode(user);
+    if (user && awaitsVerification(user)) await this.sendCode(user);
     return { sent: true };
   }
 
@@ -193,19 +202,20 @@ export class AuthService {
     }
   }
 
-  /** An account exists. Unverified: the new password and name replace the old ones (#364) and a new code is sent. */
+  /** An account exists, so far unverified: the new password and name replace the old ones (#364) and a new code is sent. */
   private async signUpAgain(dto: SignUpDto, passwordHash: string) {
     const user = await this.prisma.user.findUniqueOrThrow({
       where: { email: dto.email },
       select: { id: true, email: true, passwordHash: true, emailVerifiedAt: true, deactivatedAt: true },
     });
-    if (!user.passwordHash) return; // Google created it meanwhile
-    if (user.emailVerifiedAt || user.deactivatedAt) return this.email.sendAccountExists(user);
+    // Verified, deactivated or taken over by Google since the first lookup.
+    if (!awaitsVerification(user)) throw emailAlreadyExists();
     const { count } = await this.prisma.user.updateMany({
       where: { id: user.id, emailVerifiedAt: null, deactivatedAt: null, passwordHash: { not: null } },
       data: { passwordHash, fullName: dto.fullName },
     });
-    if (count === 1) await this.sendCode(user);
+    if (count === 0) throw emailAlreadyExists();
+    await this.sendCode(user);
   }
 
   private async sendCode(user: EmailRecipient) {

@@ -6,7 +6,7 @@
 
 ## Summary
 
-Backend half of WEB-02 "Sign up" and WEB-16 "Verify email". Adds three public endpoints to `modules/auth/`: `POST /auth/sign-up`, `POST /auth/verify-email` and `POST /auth/resend-code`, plus an email sender (Resend over `fetch`, Mailpit locally). No session exists until the code is accepted, so the sign-up response is the same for a new email and for one that has a password account. Signing up again for an unverified account replaces its password and sends a new code (D4). `POST /auth/sign-in` changes for unverified accounts: no session, and a fresh code is sent (BRD #38).
+Backend half of WEB-02 "Sign up" and WEB-16 "Verify email". Adds three public endpoints to `modules/auth/`: `POST /auth/sign-up`, `POST /auth/verify-email` and `POST /auth/resend-code`, plus an email sender (Resend over `fetch`, Mailpit locally). No session exists until the code is accepted, and an email that already has an account is refused (D9). Signing up again for an unverified account replaces its password and sends a new code (D4). `POST /auth/sign-in` changes for unverified accounts: no session, and a fresh code is sent (BRD #38).
 
 Google sign-up needs no new code: `GET /auth/google` and its callback (#4) already create a verified account and a session. Their existing e2e tests cover section 3 of the criteria.
 
@@ -28,7 +28,7 @@ Frontend-only criteria (inline errors, disabled button, spinner, countdown) rely
 
 **Performance Goals**: stay inside the Workers free-plan CPU limit (about 10 ms): one PBKDF2 derivation per sign-up, email sent in the background.
 
-**Constraints**: no difference in status or body, and similar timing (best effort, no timing test; the password hash always runs), between a new email and one with a password account; CSRF on every write; no emails or codes in URLs or logs.
+**Constraints**: verify and resend answer the same with and without an account; CSRF on every write; no emails or codes in URLs or logs.
 
 **Scale/Scope**: 3 endpoints, 1 changed endpoint, 1 enum value, 2 env vars.
 
@@ -39,7 +39,7 @@ Frontend-only criteria (inline errors, disabled button, spinner, countdown) rely
 | Rule | Status |
 |------|--------|
 | `@Public()` with a why-comment, CSRF on public writes | Pass |
-| Never reveal whether an email has an account | **Exception**: Google-only emails get 409, required by the BRD, the card and the project owner (D2) |
+| Never reveal whether an email has an account | **Exception**: sign-up tells that an email has an account (D9, project owner); sign-in failure, resend and verify still hide it |
 | Codes: `randomInt`, SHA-256 hash, `timingSafeEqual`, expiry, single use | Pass |
 | Throttle via `auth_throttles`, 429 with a stable code | Pass |
 | Emails sent after the writes, never inside them | Pass |
@@ -95,18 +95,19 @@ wrangler.jsonc, .env.example, README.md    # EMAIL_FROM var, EMAIL_API_KEY secre
 ## Decisions (project owner, 2026-11-25)
 
 - **D1 Email provider**: Resend. Local development uses Mailpit's HTTP API.
-- **D2 Google-only email**: follow the BRD. Password sign-up answers 409 `GOOGLE_ONLY_EMAIL`. The card rule was updated on 2026-11-25 to state this exception; every password account stays hidden.
+- **D2 Google-only email**: superseded by D9.
 - **D3 Unverified sign-in**: changed in this ticket. No session; a fresh code is sent, at most one per 60 seconds. This replaces that row of `specs/4/contracts/auth-sign-in.md`.
 - **D4 Sign-up again on an unverified account**: the password is replaced with the new one, the old code is voided and a new one is sent. This supersedes "nothing changed" and "its password stays the old one" in BRD §1 and decisions #36 and #37; the project owner confirmed it with the BRD. The full name is replaced too (proposed).
 - **D8 Password at verification** (2026-11-25, R1): `verify-email` takes the password, which becomes the account's. Replaces the accepted remaining case of D4: whoever holds the mailbox chooses the password. A full name typed by someone else inside the cooldown can remain; it is editable in Profile.
-- **D5 Silent sign-up cooldown**: for an existing account, a sign-up within 60 seconds of the last sign-up or code answers the normal 201 but changes and sends nothing. No error code and no screen state (the `Too soon` error was dropped for now by the project owner, 2026-11-25). The limit itself stays: otherwise a repeated sign-up would refill the 5 tries and spam the mailbox. With D8 a corrected password still counts.
-- **D6 AC 1.4**: the email to the owner of an existing verified account is the "directing them to sign in" message; the screen gives no hint (BRD).
+- **D5 Silent sign-up cooldown**: for an unverified account, a sign-up within 60 seconds of the last sign-up or code answers the normal 201 but changes and sends nothing. No error code and no screen state (the `Too soon` error was dropped for now by the project owner, 2026-11-25). The limit itself stays: otherwise a repeated sign-up would refill the 5 tries and spam the mailbox. With D8 a corrected password still counts.
+- **D6 AC 1.4**: superseded by D9.
+- **D9 Existing email** (2026-11-25, after trying the flow): sign-up answers 409 `EMAIL_ALREADY_EXISTS` for a verified, Google-only or deactivated account, one message for all. An unverified password account may sign up again (D4). Google sign-up on a password account still merges (#4). The account-exists email is removed. Accepted: sign-up reveals which emails have an account; `.claude/rules/security.md` carries the exception.
 - **D7 Frontend**: same card, built in the frontend repository.
 
 ## Risks and follow-ups
 
 - **Deploy prerequisite**: `EMAIL_API_KEY` (secret) and `EMAIL_FROM` (verified domain) are required when `NODE_ENV=production`, so staging and production refuse to start without them. Set both before merging to `develop`.
-- **Enumeration through sign-in (accepted 2026-11-25, R2)**: sign-up then sign-in with the same password answers 200 for a new or unverified email and 401 for a verified one. Kept for BRD #38.
+- **Enumeration (accepted)**: sign-up reveals existing accounts (D9), so the sign-in difference of R2 adds nothing new. A rate limit on `sign-up` limits harvesting.
 - **Code guessing**: 5 tries per code and one code per 60 seconds allow about 7 200 guesses a day, about 0.7% chance per day per account. No daily cap is specified.
 - **Verification can be blocked (R4)**: looping resend and 5 wrong codes keeps locking the owner's codes and sends up to 1 440 emails a day. Needs a Cloudflare rate limit on `sign-up`, `resend-code` and `verify-email`; the client sets it up (project owner, 2026-11-25).
 - **Frontend**: `SignInResult` with `next: "verify-email"` no longer comes with a cookie, so `/auth/me` answers 401 on `/verify-email`; the page must carry the email in client state.

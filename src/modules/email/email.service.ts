@@ -11,7 +11,7 @@ export interface EmailRecipient {
   email: string;
 }
 
-/** Sends email after the response (a wait would reveal through timing who has an account). Never throws. */
+/** Sends email after the response (a wait would reveal through timing who gets a code). Never throws. */
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
@@ -23,15 +23,6 @@ export class EmailService {
       to,
       'Your AGI Board verification code',
       `Your verification code is ${code}.\n\nIt is valid for 10 minutes. If you did not sign up, ignore this email.`,
-    );
-  }
-
-  sendAccountExists(to: EmailRecipient) {
-    const signInUrl = `${this.config.get('APP_ORIGIN', { infer: true })}/sign-in`;
-    this.send(
-      to,
-      'You already have an AGI Board account',
-      `Someone tried to sign up with this email, which already has an account. Sign in instead: ${signInUrl}\n\nIf this was not you, ignore this email.`,
     );
   }
 

@@ -7,7 +7,7 @@ import { EmailService } from './email.service';
 const to = { id: 'user-id', email: 'a@example.com' };
 const service = (env: Record<string, string>) =>
   new EmailService({
-    get: (key: string) => ({ APP_ORIGIN: 'http://localhost:5173', NODE_ENV: 'development', ...env })[key],
+    get: (key: string) => ({ NODE_ENV: 'development', ...env })[key],
   } as unknown as ConfigService<Env, true>);
 
 describe('EmailService', () => {
@@ -39,11 +39,11 @@ describe('EmailService', () => {
   });
 
   it('sends to Mailpit without a key', async () => {
-    service({}).sendAccountExists(to);
+    service({}).sendVerificationCode(to, '012345');
     await Promise.all(tasks);
     expect(sent().url).toBe('http://localhost:8025/api/v1/send');
     expect(sent().body).toMatchObject({ To: [{ Email: to.email }] });
-    expect(JSON.stringify(sent().body)).toContain('http://localhost:5173/sign-in');
+    expect(JSON.stringify(sent().body)).toContain('012345');
   });
 
   it('sends nothing in tests, even with a key', () => {

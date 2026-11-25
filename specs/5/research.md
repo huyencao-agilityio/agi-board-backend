@@ -19,8 +19,7 @@
 - **Rationale**: a cookie at sign-up, or limits kept only on real codes, would tell new emails from existing ones.
 - **Consequence**: `email_verification_codes.failed_attempts` stays 0; the throttle row is the only counter.
 - **Row rules**: sign-up, resend and sign-in (correct password, unverified) share one claim for every email, with or without an account: create the row when absent, restart it when older than 60 seconds, else refuse. Refused: sign-up and sign-in answer normally and send nothing, resend answers 429. A new user is created even when refused and gets a code by resending. Tries are only refilled together with a new window. The row is never deleted.
-- **Existing-account notice**: sent only to verified or deactivated accounts and only when the claim succeeded, so one address gets at most one per 60 seconds.
-- **Timing**: the password is hashed before the email lookup in every case.
+- **Timing**: sign-up reveals existing accounts (plan D9), so the hash runs only when it is needed.
 - **Alternatives**: a signed verification cookie (more state, breaks across devices); counting on the code row (leaks).
 
 ## R4 Races and partial failures

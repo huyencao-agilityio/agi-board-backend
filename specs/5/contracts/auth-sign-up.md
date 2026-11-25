@@ -11,10 +11,9 @@ Base path `/api/v1`. Errors use `{ error: { code, message, details } }`; clients
 | Case | Status | Body / `error.code` |
 |------|--------|---------------------|
 | New email | 201 | `{ "next": "verify-email" }`, no session cookie; a code is emailed |
-| Email with a verified (or deactivated) password account | 201 | identical; the owner is emailed that an account exists |
-| Email with an unverified password account | 201 | identical; password and full name are replaced, the old code is voided, a new one is emailed |
-| Same email again within 60 seconds of the last sign-up or code | 201 | identical; nothing is changed or sent |
-| Google-only email | 409 | `GOOGLE_ONLY_EMAIL`, `This email uses Google sign-in. Use "Continue with Google" instead.` |
+| Email with a verified, Google-only or deactivated account | 409 | `EMAIL_ALREADY_EXISTS`, "An account with this email already exists. Sign in instead." (proposed); nothing is changed or sent |
+| Email with an unverified password account | 201 | as a new email; password and full name are replaced, the old code is voided, a new one is emailed |
+| Unverified email again within 60 seconds of the last sign-up or code | 201 | as a new email; nothing is changed or sent |
 | Invalid email, password or full name | 400 | `VALIDATION_FAILED`, one `details` entry per failed rule |
 
 Password: 8 to 128 characters, at least one letter and one number, not containing the part of the email before `@` (any letter case).

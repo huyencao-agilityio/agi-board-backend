@@ -33,7 +33,7 @@ Implement core functionality to support user workflows and system requirements.
 - Maximum 5 wrong verification attempts allowed
 - Code resend allowed after 60 seconds
 - Google sign-up MUST skip email verification
-- Duplicate email attempts MUST not reveal existing accounts, except an email that only uses Google: sign-up with a password is refused with "This email uses Google sign-in. Use "Continue with Google" instead." (BRD §1)
+- Sign-up with a password for an email that already has an account (verified, Google-only or deactivated) is refused with "An account with this email already exists. Sign in instead."; an account whose email is not verified yet may sign up again (BRD §1)
 - System MUST require full name (at least 1 non-space character)
 
 ---
@@ -44,7 +44,7 @@ Implement core functionality to support user workflows and system requirements.
 - [ ] **Given** the sign-up screen is displayed, **When** the user enters invalid email format, **Then** an inline error appears and Sign up button stays disabled.
 - [ ] **Given** the user enters a valid email and weak password, **When** the password is validated, **Then** error messages show which requirements are missing.
 - [ ] **Given** the user enters all valid fields including full name, **When** the user taps Sign up, **Then** the button shows a spinner and they are sent to the email verification screen.
-- [ ] **Given** the user has already signed up with an email, **When** they try to sign up again, **Then** they see a generic message directing them to sign in (not revealing the account exists).
+- [ ] **Given** the email already has a verified or Google account, **When** the user tries to sign up with it and a password, **Then** they see "An account with this email already exists. Sign in instead.".
 
 ### 2. Email verification
 - [ ] **Given** the user is on the verification screen after sign-up, **When** they enter the 6-digit code, **Then** the account is verified and they proceed to the main app.

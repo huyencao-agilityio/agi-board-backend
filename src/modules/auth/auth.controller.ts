@@ -46,10 +46,10 @@ export class AuthController {
   // Public: a person without an account must reach it. CSRF still applies to this write.
   @Public()
   @Post('sign-up')
-  @ApiResponse({ status: 201, description: 'Same for a new email and one with a password account; no session yet.' })
+  @ApiResponse({ status: 201, description: 'New or still unverified account; a code is emailed, no session yet.' })
   @ApiResponse({ status: 400, description: 'VALIDATION_FAILED, one `details` entry per failed rule' })
   @ApiResponse({ status: 403, description: 'CSRF_INVALID' })
-  @ApiResponse({ status: 409, description: 'GOOGLE_ONLY_EMAIL' })
+  @ApiResponse({ status: 409, description: 'EMAIL_ALREADY_EXISTS (verified, Google or deactivated account)' })
   signUp(@Body() dto: SignUpDto) {
     return this.auth.signUp(dto);
   }
