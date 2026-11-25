@@ -2,7 +2,6 @@
 
 ## Claude Code
 
-- Reply to the user in Vietnamese; code, comments, commits and PRs in English.
 - Starting work on a Trello card (number or URL): use the `pull-ticket` skill.
 - Creating a pull request: use the `create-pr` skill.
 - The full flow is the diagram in `README.md`: after implementing, run the checks, then the `code-reviewer` agent
