@@ -88,6 +88,11 @@ export class SignUpService {
     if (user.deactivatedAt) throw accountDeactivated();
 
     const emailVerifiedAt = new Date();
+    // A reset link requested earlier must not replace the password chosen here, so it is voided first.
+    await this.prisma.passwordResetToken.updateMany({
+      where: { userId: user.id, usedAt: null, voidedAt: null },
+      data: { voidedAt: emailVerifiedAt },
+    });
     // Whatever an earlier sign-up stored is replaced here: it may come from a stranger who used this email first.
     const { count } = await this.prisma.user.updateMany({
       where: { id: user.id, emailVerifiedAt: null, deactivatedAt: null, passwordHash: { not: null } },

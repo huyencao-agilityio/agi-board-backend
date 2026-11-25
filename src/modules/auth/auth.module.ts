@@ -4,7 +4,9 @@ import { AuthController } from './auth.controller';
 import { GoogleAuthController } from './google/google-auth.controller';
 import { GoogleOAuthService } from './google/google-oauth.service';
 import { GoogleSignInService } from './google/google-sign-in.service';
+import { PasswordResetService } from './password-reset/password-reset.service';
 import { PasswordService } from './password/password.service';
+import { SendCooldownService } from './send-cooldown.service';
 import { SessionService } from './session/session.service';
 import { SignInThrottleService } from './sign-in/sign-in-throttle.service';
 import { SignInService } from './sign-in/sign-in.service';
@@ -18,7 +20,9 @@ import { SignUpService } from './sign-up/sign-up.service';
     EmailVerificationService,
     GoogleOAuthService,
     GoogleSignInService,
+    PasswordResetService,
     PasswordService,
+    SendCooldownService,
     SessionService,
     SignInService,
     SignInThrottleService,

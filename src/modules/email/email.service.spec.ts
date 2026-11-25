@@ -46,6 +46,31 @@ describe('EmailService', () => {
     expect(JSON.stringify(sent().body)).toContain('012345');
   });
 
+  it('sends the reset link with the token in the fragment', async () => {
+    service({ APP_ORIGIN: 'https://app.example.com' }).sendResetLink(to, 'tok');
+    await Promise.all(tasks);
+    expect(sent().body).toMatchObject({ To: [{ Email: to.email }] });
+    expect((sent().body as { Text: string }).Text).toContain('https://app.example.com/reset-password#token=tok\n');
+  });
+
+  it('sends the Google notice without a reset link', async () => {
+    service({ APP_ORIGIN: 'https://app.example.com' }).sendGoogleSignInNotice(to);
+    await Promise.all(tasks);
+    const { Text } = sent().body as { Text: string };
+    expect(Text).toContain('https://app.example.com/sign-in');
+    expect(Text).not.toContain('token');
+  });
+
+  it('logs neither the address nor the reset token when sending fails', async () => {
+    fetchMock.mockRejectedValue(new TypeError(`cannot reach ${to.email}`));
+    service({ APP_ORIGIN: 'https://app.example.com' }).sendResetLink(to, 'secret-token');
+    await Promise.all(tasks);
+    const logged = JSON.stringify(warn.mock.calls);
+    expect(logged).toContain(to.id);
+    expect(logged).not.toContain(to.email);
+    expect(logged).not.toContain('secret-token');
+  });
+
   it('sends nothing in tests, even with a key', () => {
     service({ NODE_ENV: 'test', EMAIL_API_KEY: 'key' }).sendVerificationCode(to, '012345');
     expect(tasks).toHaveLength(0);

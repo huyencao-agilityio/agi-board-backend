@@ -3,14 +3,13 @@ import { createHash, randomInt, timingSafeEqual } from 'node:crypto';
 import { isUniqueConflict } from '../../../database/prisma-errors';
 import { PrismaService } from '../../../database/prisma.service';
 import { EmailService, type EmailRecipient } from '../../email/email.service';
+import { SendCooldownService } from '../send-cooldown.service';
 import { throttleKey } from '../throttle-key';
 
 export const MAX_CODE_ATTEMPTS = 5;
 export const CODE_MINUTES = 10;
-export const RESEND_SECONDS = 60;
 
 const codeHash = (userId: string, code: string) => createHash('sha256').update(`${userId}:${code}`).digest('hex');
-const cooldownStart = (now: Date) => new Date(now.getTime() - RESEND_SECONDS * 1000);
 const codeWindowStart = (now: Date) => new Date(now.getTime() - CODE_MINUTES * 60_000);
 
 /**
@@ -23,28 +22,16 @@ export class EmailVerificationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly email: EmailService,
+    private readonly cooldown: SendCooldownService,
   ) {}
 
   private key(email: string) {
     return throttleKey('verify_email', email);
   }
 
-  /**
-   * Opens a new window unless one began within the cooldown: the same rule for sign-up, resend and sign-in, and for
-   * every email. Only one of several parallel calls wins.
-   * shortcut: no cleanup of stale rows, add a periodic delete of rows with updated_at older than 30 days when the table grows.
-   */
-  async claim(email: string, now = new Date()): Promise<boolean> {
-    if (await this.restart(email, now)) return true;
-    // Usual refusal; the conflict below is only for a parallel request (the D1 adapter logs every conflict as an error).
-    if (await this.findRow(email)) return false;
-    try {
-      await this.prisma.authThrottle.create({ data: { ...this.key(email), lastSentAt: now }, select: { id: true } });
-      return true;
-    } catch (err) {
-      if (isUniqueConflict(err)) return false;
-      throw err;
-    }
+  /** The same window for sign-up, resend and sign-in. */
+  claim(email: string, now = new Date()): Promise<boolean> {
+    return this.cooldown.claim('verify_email', email, now);
   }
 
   /** Counts this attempt before the code is compared, with one atomic update, so parallel guesses cannot exceed the limit. */
@@ -104,14 +91,6 @@ export class EmailVerificationService {
     const { count } = await this.prisma.emailVerificationCode.updateMany({
       where: { id: live.id, consumedAt: null, voidedAt: null },
       data: { consumedAt: now },
-    });
-    return count === 1;
-  }
-
-  private async restart(email: string, now: Date): Promise<boolean> {
-    const { count } = await this.prisma.authThrottle.updateMany({
-      where: { ...this.key(email), lastSentAt: { lte: cooldownStart(now) } },
-      data: { failedCount: 0, lastSentAt: now },
     });
     return count === 1;
   }

@@ -1,7 +1,7 @@
-import { HttpException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { HttpException, Injectable } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { PrismaService } from '../../../database/prisma.service';
-import { accountDeactivated } from '../auth-errors';
+import { accountDeactivated, invalidCredentials } from '../auth-errors';
 import { passwordUserSelect } from '../auth-user.select';
 import type { SignInDto } from '../dto/sign-in.dto';
 import { PasswordService } from '../password/password.service';
@@ -36,7 +36,7 @@ export class SignInService {
       : await this.passwords.verifyDummy(dto.password);
     if (!user || !passwordOk) {
       await this.throttle.recordFailure(dto.email);
-      throw new UnauthorizedException({ code: 'INVALID_CREDENTIALS', message: 'Email or password is incorrect.' });
+      throw invalidCredentials();
     }
     // A correct password clears the count, including for a deactivated account (the guess is no longer a failure).
     await this.throttle.reset(dto.email);
@@ -46,6 +46,6 @@ export class SignInService {
       if (await this.verification.claim(user.email)) await this.verification.sendCode(user);
       return this.sessions.toResult(user);
     }
-    return this.sessions.createSession(user, req, res);
+    return this.sessions.createSession(user, req, res, user.passwordHash);
   }
 }

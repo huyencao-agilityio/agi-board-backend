@@ -98,6 +98,6 @@ describe('SignInService', () => {
     sessions.createSession.mockResolvedValue('session');
     expect(await signIn()).toBe('session');
     expect(throttle.reset).toHaveBeenCalledWith(dto.email);
-    expect(sessions.createSession).toHaveBeenCalledWith(account, req, res);
+    expect(sessions.createSession).toHaveBeenCalledWith(account, req, res, account.passwordHash);
   });
 });
