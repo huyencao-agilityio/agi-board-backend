@@ -37,7 +37,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/review"
           gh pr diff "$PR" > "$RUNNER_TEMP/review/pr.diff"
           gh api "repos/$GH_REPO/pulls/$PR/comments" --paginate \
-            --jq '.[] | select(.user.login == "claude[bot]" or (.author_association | IN("OWNER", "MEMBER", "COLLABORATOR"))) | {user: .user.login, path, line, body}' > "$RUNNER_TEMP/review/comments.jsonl"
+            --jq '.[] | select(.user.login == "github-actions[bot]" or (.author_association | IN("OWNER", "MEMBER", "COLLABORATOR"))) | {user: .user.login, path, line, body}' > "$RUNNER_TEMP/review/comments.jsonl"
 
       - name: Run Claude Code Review
         id: review
