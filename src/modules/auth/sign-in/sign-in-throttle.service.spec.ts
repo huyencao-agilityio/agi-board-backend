@@ -1,4 +1,4 @@
-import type { PrismaService } from '../../database/prisma.service';
+import type { PrismaService } from '../../../database/prisma.service';
 import { LOCK_MINUTES, MAX_FAILURES, SignInThrottleService } from './sign-in-throttle.service';
 
 interface Row {

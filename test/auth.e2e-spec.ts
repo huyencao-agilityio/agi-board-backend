@@ -6,7 +6,7 @@ import { AppModule } from '../src/app.module';
 import { setupApp } from '../src/app.setup';
 import { hashSessionToken } from '../src/common/session-token';
 import { PrismaService } from '../src/database/prisma.service';
-import { PasswordService } from '../src/modules/auth/password.service';
+import { PasswordService } from '../src/modules/auth/password/password.service';
 
 jest.setTimeout(60_000);
 

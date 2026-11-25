@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { createHash } from 'node:crypto';
-import { PrismaService } from '../../database/prisma.service';
+import { PrismaService } from '../../../database/prisma.service';
+import { throttleKey } from '../throttle-key';
 
 export const MAX_FAILURES = 5;
 export const LOCK_MINUTES = 15;
@@ -18,7 +18,7 @@ export class SignInThrottleService {
   constructor(private readonly prisma: PrismaService) {}
 
   private key(email: string) {
-    return { scope: 'sign_in' as const, subjectKey: createHash('sha256').update(email.toLowerCase()).digest('hex') };
+    return throttleKey('sign_in', email);
   }
 
   /** Counts this attempt. Returns false when the email is locked: the caller must not check the password. */

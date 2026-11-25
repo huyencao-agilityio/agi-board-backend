@@ -1,5 +1,5 @@
 import type { ConfigService } from '@nestjs/config';
-import type { Env } from '../../config/env';
+import type { Env } from '../../../config/env';
 import { PasswordService } from './password.service';
 
 const withIterations = (n: number) => new PasswordService({ get: () => n } as unknown as ConfigService<Env, true>);
