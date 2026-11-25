@@ -26,6 +26,27 @@ export class EmailService {
     );
   }
 
+  /** The token goes in the fragment, which browsers never send to a server or in `Referer`. */
+  sendResetLink(to: EmailRecipient, token: string) {
+    this.send(
+      to,
+      'Reset your AGI Board password',
+      `Open this link to set a new password:\n\n${this.appOrigin()}/reset-password#token=${token}\n\nIt is valid for 30 minutes and can be used once. If you did not ask for it, ignore this email.`,
+    );
+  }
+
+  sendGoogleSignInNotice(to: EmailRecipient) {
+    this.send(
+      to,
+      'Sign in to AGI Board with Google',
+      `Someone asked to reset the password for this email. Your account uses Google sign-in and has no password.\n\nUse Continue with Google at ${this.appOrigin()}/sign-in. If you did not ask for it, ignore this email.`,
+    );
+  }
+
+  private appOrigin() {
+    return this.config.get('APP_ORIGIN', { infer: true });
+  }
+
   private send(to: EmailRecipient, subject: string, text: string) {
     // A key in a developer's .env must never send real email from tests.
     if (this.config.get('NODE_ENV', { infer: true }) === 'test') return;

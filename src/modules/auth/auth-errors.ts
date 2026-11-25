@@ -1,4 +1,7 @@
-import { ForbiddenException } from '@nestjs/common';
+import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
+
+export const invalidCredentials = () =>
+  new UnauthorizedException({ code: 'INVALID_CREDENTIALS', message: 'Email or password is incorrect.' });
 
 export const accountDeactivated = () =>
   new ForbiddenException({

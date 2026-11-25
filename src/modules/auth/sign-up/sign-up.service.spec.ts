@@ -24,6 +24,7 @@ const closedAccounts: [string, object][] = [
 describe('SignUpService', () => {
   const user = { findUnique: jest.fn(), findUniqueOrThrow: jest.fn(), create: jest.fn(), updateMany: jest.fn() };
   const userSession = { updateMany: jest.fn() };
+  const passwordResetToken = { updateMany: jest.fn() };
   const passwords = { hash: jest.fn() };
   const verification = { claim: jest.fn(), attempt: jest.fn(), consume: jest.fn(), sendCode: jest.fn() };
   const sessions = { createSession: jest.fn() };
@@ -39,7 +40,7 @@ describe('SignUpService', () => {
     user.create.mockResolvedValue({ id: 'u1', email });
     user.updateMany.mockResolvedValue({ count: 1 });
     service = new SignUpService(
-      { user, userSession } as unknown as PrismaService,
+      { user, userSession, passwordResetToken } as unknown as PrismaService,
       passwords as unknown as PasswordService,
       verification as unknown as EmailVerificationService,
       sessions as unknown as SessionService,
@@ -177,6 +178,10 @@ describe('SignUpService', () => {
       expect(userSession.updateMany).toHaveBeenCalledWith({
         where: { userId: 'u1', endedAt: null },
         data: { endedAt: expect.any(Date) as Date, endReason: 'password_reset' },
+      });
+      expect(passwordResetToken.updateMany).toHaveBeenCalledWith({
+        where: { userId: 'u1', usedAt: null, voidedAt: null },
+        data: { voidedAt: expect.any(Date) as Date },
       });
       expect(order(user.updateMany)).toBeLessThan(order(userSession.updateMany));
       expect(order(userSession.updateMany)).toBeLessThan(order(sessions.createSession));

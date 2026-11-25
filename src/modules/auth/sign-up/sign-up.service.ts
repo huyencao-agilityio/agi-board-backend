@@ -98,6 +98,11 @@ export class SignUpService {
       where: { userId: user.id, endedAt: null },
       data: { endedAt: emailVerifiedAt, endReason: 'password_reset' },
     });
+    // A reset link requested earlier must not replace the password just chosen.
+    await this.prisma.passwordResetToken.updateMany({
+      where: { userId: user.id, usedAt: null, voidedAt: null },
+      data: { voidedAt: emailVerifiedAt },
+    });
     return this.sessions.createSession({ ...user, emailVerifiedAt }, req, res);
   }
 

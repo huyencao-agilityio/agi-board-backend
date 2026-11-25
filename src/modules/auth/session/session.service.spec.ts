@@ -26,6 +26,7 @@ interface Update {
 describe('SessionService', () => {
   const update = jest.fn<Promise<object>, [Update]>(() => Promise.resolve({}));
   const findUniqueOrThrow = jest.fn();
+  const updateMany = jest.fn();
   const cookie = jest.fn<void, [name: string, value: string, options: object]>();
   const res = { cookie } as unknown as Response;
   let service: SessionService;
@@ -33,7 +34,7 @@ describe('SessionService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     service = new SessionService(
-      { user: { update, findUniqueOrThrow } } as unknown as PrismaService,
+      { user: { update, findUniqueOrThrow }, userSession: { updateMany } } as unknown as PrismaService,
       { get: (key: string) => CONFIG[key] } as unknown as ConfigService<Env, true>,
     );
   });
@@ -61,6 +62,26 @@ describe('SessionService', () => {
     update.mockClear();
     await service.createSession(user, request({}), res);
     expect(stored().ipAddress).toBeNull();
+  });
+
+  it('keeps the session when the checked password is still the current one', async () => {
+    findUniqueOrThrow.mockResolvedValueOnce({ passwordHash: 'h' });
+    await service.createSession(user, request({}), res, 'h');
+    expect(cookie).toHaveBeenCalledTimes(1);
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+
+  it.each([['new'], [null]])('ends the session and sets no cookie when the password became %s', async (now) => {
+    findUniqueOrThrow.mockResolvedValueOnce({ passwordHash: now });
+    await expect(service.createSession(user, request({}), res, 'h')).rejects.toMatchObject({
+      status: 401,
+      response: { code: 'INVALID_CREDENTIALS' },
+    });
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { tokenHash: stored().tokenHash, endedAt: null },
+      data: { endedAt: expect.any(Date) as Date, endReason: 'password_reset' },
+    });
+    expect(cookie).not.toHaveBeenCalled();
   });
 
   it('returns only the public fields and where to go next', () => {

@@ -1,6 +1,7 @@
 import type { PrismaService } from '../../../database/prisma.service';
 import { Prisma } from '../../../generated/prisma/client';
 import type { EmailService } from '../../email/email.service';
+import { SendCooldownService } from '../send-cooldown.service';
 import { EmailVerificationService } from './email-verification.service';
 
 const conflict = () => new Prisma.PrismaClientKnownRequestError('conflict', { code: 'P2002', clientVersion: 'test' });
@@ -82,7 +83,11 @@ describe('EmailVerificationService', () => {
     sendVerificationCode.mockClear();
     const fake = fakePrisma();
     ({ codes } = fake);
-    service = new EmailVerificationService(fake.prisma, { sendVerificationCode } as unknown as EmailService);
+    service = new EmailVerificationService(
+      fake.prisma,
+      { sendVerificationCode } as unknown as EmailService,
+      new SendCooldownService(fake.prisma),
+    );
   });
 
   const useUpAttempts = async (at = now) => {
