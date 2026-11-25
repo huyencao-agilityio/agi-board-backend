@@ -183,6 +183,7 @@ describe('SignUpService', () => {
         where: { userId: 'u1', usedAt: null, voidedAt: null },
         data: { voidedAt: expect.any(Date) as Date },
       });
+      expect(order(passwordResetToken.updateMany)).toBeLessThan(order(user.updateMany));
       expect(order(user.updateMany)).toBeLessThan(order(userSession.updateMany));
       expect(order(userSession.updateMany)).toBeLessThan(order(sessions.createSession));
     });

@@ -97,6 +97,7 @@ Confirmed by the project owner, 2026-11-25; the card includes the backend:
 - **Link voiding and mail volume**: anyone can request a link for an email every 60 seconds, which voids the owner's earlier link and sends up to 1 440 emails a day. Same as #5 R4: needs a Cloudflare rate limit on `forgot-password` (client setup).
 - **Background failure**: if issuing the link or the mail provider fails, the person still sees the Sent message and can retry after 60 seconds. WEB-14's Send failed state therefore covers network and server errors of the request only.
 - **Failed link write**: voiding and creating a link are two statements, as in `issueCode`. If the second fails, the earlier link is dead and nothing is sent; a new request after 60 seconds recovers.
+- **Late link**: a link requested just before `verify-email` may be written just after the void and stay valid. It only reaches the mailbox owner.
 - **Unverified account**: sign-up again (decision #364) can overwrite a password just set by a reset. No access for the stranger; the owner signs up or resets again.
 - **Lockout**: wrong sign-ins plus a reset request every 60 seconds can keep an owner locked out of password sign-in. The Cloudflare rate limit must be per IP and in place before production.
 - **Frontend**: same card, frontend repository. It must read the token from the fragment and remove it from the address bar.
@@ -116,3 +117,4 @@ No Critical or High finding, no account-takeover path. The raw SQL batch, tokens
 | R5 | Low | Sign-up again can undo a reset of an unverified account (#42 with #364) | Recorded under Risks |
 | R6 | Low | Link voiding combined with the sign-in lock | Recorded under Risks |
 | R7 | Low | A request body over the Express limit answers 500 on every route (existing) | Separate ticket |
+| R8 | Low | Second review (R1, R2 fixes): voiding after the password write left a race with a reset | Fixed: the link is voided first |
