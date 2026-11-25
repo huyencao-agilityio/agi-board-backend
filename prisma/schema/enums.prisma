@@ -70,6 +70,7 @@ enum AuthThrottleScope {
   sign_in
   change_password
   reset_email
+  verify_email
 
   @@map("auth_throttle_scope")
 }

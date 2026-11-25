@@ -38,7 +38,7 @@ Source: proposal §7 (Security NFR), risk R-02, and the guards already in `src/c
 
 ## Account privacy and abuse
 
-- Never reveal whether an email has an account: sign-up, sign-in failure, forgot password and lockout return the same response and status for every address, with similar timing.
+- Never reveal whether an email has an account: sign-in failure, resend code, forgot password and lockout return the same response and status for every address, with similar timing. Exception: sign-up answers 409 `EMAIL_ALREADY_EXISTS`, accepted by the project owner (specs/5/plan.md D9).
 - Lockout after repeated failed sign-ins (proposal default: 5 failures, 15 minutes) via the `auth_throttles` table; return 429 with a stable code. Throttle other abuse-prone public endpoints (resend code, forgot password) the same way.
 
 ## Personal data

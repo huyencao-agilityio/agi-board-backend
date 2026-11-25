@@ -13,16 +13,29 @@ export const envSchema = z
      * recommends 600 000. Raise it after moving to a paid plan. Measure on staging before changing.
      */
     PASSWORD_PBKDF2_ITERATIONS: z.coerce.number().int().min(1000).default(10_000),
-    // Optional outside production so local dev and tests boot without a Google project; see the refine below.
     /** Serves Swagger UI. Defaults to on outside production; staging sets it to 'true'. */
     ENABLE_DOCS: z.enum(['true', 'false']).optional(),
+    // Optional outside production so local dev and tests boot without a Google project; see the refine below.
     GOOGLE_CLIENT_ID: z.string().min(1).optional(),
     GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
     GOOGLE_REDIRECT_URI: z.url().optional(),
+    /** Resend API key. Without it (never in production) emails go to the local Mailpit. */
+    EMAIL_API_KEY: z.string().min(1).optional(),
+    /** Sender, e.g. `AGI Board <no-reply@example.com>`. */
+    EMAIL_FROM: z.string().min(1).optional(),
   })
   .superRefine((env, ctx) => {
+    if (env.EMAIL_API_KEY && !env.EMAIL_FROM && env.NODE_ENV !== 'production') {
+      ctx.addIssue({ code: 'custom', path: ['EMAIL_FROM'], message: 'EMAIL_FROM is required with EMAIL_API_KEY' });
+    }
     if (env.NODE_ENV !== 'production') return;
-    for (const key of ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REDIRECT_URI'] as const) {
+    for (const key of [
+      'GOOGLE_CLIENT_ID',
+      'GOOGLE_CLIENT_SECRET',
+      'GOOGLE_REDIRECT_URI',
+      'EMAIL_API_KEY',
+      'EMAIL_FROM',
+    ] as const) {
       if (!env[key]) ctx.addIssue({ code: 'custom', path: [key], message: `${key} is required in production` });
     }
   });

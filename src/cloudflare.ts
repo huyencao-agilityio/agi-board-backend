@@ -17,3 +17,15 @@ export function getBindings(): Bindings {
   if (!current) throw new Error('Cloudflare bindings are not set; start the app through the Worker entry.');
   return current;
 }
+
+let background: (task: Promise<unknown>) => void = () => {};
+
+/** Called by the Worker entry with `waitUntil`, so a task outlives the response. Elsewhere the process keeps it alive. */
+export function setBackgroundRunner(run: (task: Promise<unknown>) => void) {
+  background = run;
+}
+
+/** Runs a task the response must not wait for. The task handles its own errors. */
+export function runInBackground(task: Promise<unknown>) {
+  background(task);
+}
