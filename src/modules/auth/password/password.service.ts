@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { timingSafeEqual } from 'node:crypto';
-import type { Env } from '../../config/env';
+import type { Env } from '../../../config/env';
 
 const ALGORITHM = 'pbkdf2-sha256';
 const HASH_BYTES = 32;

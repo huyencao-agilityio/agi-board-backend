@@ -1,5 +1,6 @@
-import type { PrismaService } from '../../database/prisma.service';
-import { Prisma } from '../../generated/prisma/client';
+import type { PrismaService } from '../../../database/prisma.service';
+import { Prisma } from '../../../generated/prisma/client';
+import type { EmailService } from '../../email/email.service';
 import { EmailVerificationService } from './email-verification.service';
 
 const conflict = () => new Prisma.PrismaClientKnownRequestError('conflict', { code: 'P2002', clientVersion: 'test' });
@@ -73,13 +74,15 @@ describe('EmailVerificationService', () => {
   const now = new Date('2026-11-25T10:00:00Z');
   const after = (seconds: number) => new Date(now.getTime() + seconds * 1000);
   const email = 'a@e2e.test';
+  const sendVerificationCode = jest.fn();
   let service: EmailVerificationService;
   let codes: Code[];
 
   beforeEach(() => {
+    sendVerificationCode.mockClear();
     const fake = fakePrisma();
     ({ codes } = fake);
-    service = new EmailVerificationService(fake.prisma);
+    service = new EmailVerificationService(fake.prisma, { sendVerificationCode } as unknown as EmailService);
   });
 
   const useUpAttempts = async (at = now) => {
@@ -162,6 +165,18 @@ describe('EmailVerificationService', () => {
       await issue(after(60));
       expect(old.voidedAt).toEqual(after(60));
       expect(codes.filter((c) => !c.voidedAt)).toHaveLength(1);
+    });
+
+    it('sendCode emails the issued code, and nothing when a parallel request issued one first', async () => {
+      const user = { id: 'u', email };
+      const issueCode = jest.spyOn(service, 'issueCode');
+      await service.sendCode(user);
+      expect(sendVerificationCode).toHaveBeenCalledTimes(1);
+      expect(sendVerificationCode).toHaveBeenCalledWith(user, await issueCode.mock.results[0].value);
+
+      issueCode.mockResolvedValueOnce(null);
+      await service.sendCode(user);
+      expect(sendVerificationCode).toHaveBeenCalledTimes(1);
     });
   });
 });

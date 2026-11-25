@@ -1,5 +1,5 @@
 import { Matches } from 'class-validator';
-import { IsNewPassword } from '../password-rules';
+import { IsNewPassword } from '../password/password-rules';
 import { EmailDto } from './email.dto';
 
 export class VerifyEmailDto extends EmailDto {

@@ -10,6 +10,7 @@ Layering, global auth and the error envelope are defined in `AGENTS.md`; this fi
 ## Module layout
 
 - One folder per feature: `src/modules/<feature>/` with `<feature>.module.ts`, `<feature>.controller.ts`, `<feature>.service.ts`, `dto/`, and `*.spec.ts`. Register the module in `AppModule.imports`.
+- A large module may group its services and controllers in subfolders by concern (see `src/modules/auth/`): still one module, with `dto/` and shared helpers at the module root.
 - Cross-cutting code lives in `src/common/` (decorators, guards, filters) and is reused, not copied. Permission rules live only in `src/modules/permissions/`.
 - `DatabaseModule` provides `PrismaService`; inject it, never `new PrismaClient()` in `src/`.
 - Export a service from its module only when another module really needs it; no circular imports, no `forwardRef`.

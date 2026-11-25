@@ -7,8 +7,8 @@ import { AppModule } from '../src/app.module';
 import { setupApp } from '../src/app.setup';
 import { hashSessionToken } from '../src/common/session-token';
 import { PrismaService } from '../src/database/prisma.service';
-import { PasswordService } from '../src/modules/auth/password.service';
-import { EmailVerificationService } from '../src/modules/auth/email-verification.service';
+import { PasswordService } from '../src/modules/auth/password/password.service';
+import { EmailVerificationService } from '../src/modules/auth/sign-up/email-verification.service';
 import { EmailService, type EmailRecipient } from '../src/modules/email/email.service';
 
 jest.setTimeout(60_000);

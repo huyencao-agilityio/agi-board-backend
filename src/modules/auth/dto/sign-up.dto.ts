@@ -1,6 +1,6 @@
 import { Transform } from 'class-transformer';
 import { IsNotEmpty, IsString } from 'class-validator';
-import { IsNewPassword } from '../password-rules';
+import { IsNewPassword } from '../password/password-rules';
 import { EmailDto } from './email.dto';
 
 export class SignUpDto extends EmailDto {

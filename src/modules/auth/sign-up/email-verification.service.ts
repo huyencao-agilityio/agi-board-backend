@@ -1,14 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { createHash, randomInt, timingSafeEqual } from 'node:crypto';
-import { PrismaService } from '../../database/prisma.service';
-import { Prisma } from '../../generated/prisma/client';
+import { isUniqueConflict } from '../../../database/prisma-errors';
+import { PrismaService } from '../../../database/prisma.service';
+import { EmailService, type EmailRecipient } from '../../email/email.service';
+import { throttleKey } from '../throttle-key';
 
 export const MAX_CODE_ATTEMPTS = 5;
 export const CODE_MINUTES = 10;
 export const RESEND_SECONDS = 60;
 
-const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
-const codeHash = (userId: string, code: string) => sha256(`${userId}:${code}`);
+const codeHash = (userId: string, code: string) => createHash('sha256').update(`${userId}:${code}`).digest('hex');
 const cooldownStart = (now: Date) => new Date(now.getTime() - RESEND_SECONDS * 1000);
 const codeWindowStart = (now: Date) => new Date(now.getTime() - CODE_MINUTES * 60_000);
 
@@ -19,10 +20,13 @@ const codeWindowStart = (now: Date) => new Date(now.getTime() - CODE_MINUTES * 6
  */
 @Injectable()
 export class EmailVerificationService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly email: EmailService,
+  ) {}
 
   private key(email: string) {
-    return { scope: 'verify_email' as const, subjectKey: sha256(email.toLowerCase()) };
+    return throttleKey('verify_email', email);
   }
 
   /**
@@ -81,6 +85,12 @@ export class EmailVerificationService {
     }
   }
 
+  /** Issues a code and emails it; nothing when a parallel request issued one first. */
+  async sendCode(user: EmailRecipient): Promise<void> {
+    const code = await this.issueCode(user.id);
+    if (code) this.email.sendVerificationCode(user, code);
+  }
+
   /** Uses up the live code. True for exactly one caller with the right code. */
   async consume(userId: string, code: string, now = new Date()): Promise<boolean> {
     const live = await this.prisma.emailVerificationCode.findFirst({
@@ -112,8 +122,4 @@ export class EmailVerificationService {
       select: { lastSentAt: true },
     });
   }
-}
-
-export function isUniqueConflict(err: unknown) {
-  return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
 }
