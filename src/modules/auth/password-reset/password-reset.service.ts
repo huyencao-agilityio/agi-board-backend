@@ -99,7 +99,7 @@ export class PasswordResetService {
         data: {
           userId: user.id,
           tokenHash: hashSessionToken(token),
-          expiresAt: new Date(now.getTime() + LINK_MINUTES * 60_000),
+          expiresAt: new Date(now.getTime() + LINK_MINUTES * 60),
         },
         select: { id: true },
       });
