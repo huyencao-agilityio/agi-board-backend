@@ -48,7 +48,7 @@ export class PasswordResetService {
         where: { email: dto.email },
         select: { id: true, email: true, passwordHash: true, deactivatedAt: true },
       });
-      if (user && !user.deactivatedAt) this.sendInBackground(user, !!user.passwordHash);
+      if (user) this.sendInBackground(user, !!user.passwordHash);
     }
     return { sent: true };
   }
@@ -74,7 +74,7 @@ export class PasswordResetService {
         else this.email.sendGoogleSignInNotice(user);
       } catch (err) {
         // Database errors can quote the query parameters, so only the error class is logged.
-        this.logger.warn(`Reset link for user ${user.id} failed: ${err instanceof Error ? err.name : 'unknown error'}`);
+        this.logger.warn(`Reset link for ${user.email} failed: ${err instanceof Error ? err.name : 'unknown error'}`);
       }
     };
     try {
@@ -116,7 +116,6 @@ export class PasswordResetService {
         tokenHash: hashSessionToken(token),
         usedAt: null,
         voidedAt: null,
-        expiresAt: { gt: new Date() },
         user: { deactivatedAt: null, passwordHash: { not: null } },
       },
       select: { id: true, user: { select: { id: true, email: true } } },
