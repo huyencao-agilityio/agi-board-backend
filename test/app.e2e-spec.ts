@@ -90,6 +90,14 @@ describe('App (e2e)', () => {
       expect(res.body).toHaveProperty('openapi');
     });
 
+    it('shows /api/v1 once as the server, not in every path', async () => {
+      const res = await request(app.getHttpServer()).get('/api/docs-json').expect(200);
+      const doc = res.body as { servers: { url: string }[]; paths: Record<string, unknown> };
+      expect(doc.servers).toEqual([{ url: '/api/v1' }]);
+      expect(doc.paths).toHaveProperty(['/users/me']);
+      expect(Object.keys(doc.paths).some((p) => p.startsWith('/api/v1'))).toBe(false);
+    });
+
     it('GET /health is public', () => request(app.getHttpServer()).get('/api/v1/health').expect(200, { status: 'ok' }));
 
     it('GET /health/db reaches the database', () =>
