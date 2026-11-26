@@ -158,6 +158,8 @@ Repo root: `/home/huyencao/Documents/training/agi-board/agi-board-backend-22/`. 
 
 - [X] T031 [US3] Refuse a new password equal to the current one in `src/modules/auth/account/account-security.service.ts` (`SAME_AS_CURRENT` added to the rule list, before hashing); unit case in `account-security.service.spec.ts`, e2e case in `test/account-security.e2e-spec.ts`; spec, research D6, contract and quickstart updated
 
+- [X] T032 [US2] Serve `GET /users/me/avatar` only for the current `?v=` (404 otherwise) in `src/modules/users/avatar.service.ts` / `users.controller.ts`, with the shared `avatarVersion()` in `profile.service.ts`; unit and e2e cases; research D4 (also the same-site requirement for the cookie on `<img>`), contract and quickstart updated
+
 ---
 
 ## Dependencies & Execution Order

@@ -179,6 +179,11 @@ describe('Profile (e2e)', () => {
       const second = await upload(user.writeCookies, JPEG, 'b.jpg', 'image/jpeg').expect(200);
       expect(second.body.avatarUrl).not.toBe(first.body.avatarUrl);
       expect(await getBindings().IMAGES.get(firstKey)).toBeNull();
+      // The old URL is no longer served: a cached URL always means one image.
+      await http()
+        .get(first.body.avatarUrl as string)
+        .set('Cookie', user.cookie)
+        .expect(404);
     });
 
     it('parallel uploads keep exactly one object for the user', async () => {
@@ -188,6 +193,17 @@ describe('Profile (e2e)', () => {
       expect(results.some((r) => r.status === 200)).toBe(true);
       const listed = await getBindings().IMAGES.list({ prefix: `avatars/${user.id}/` });
       expect(listed.objects.map((o) => o.key)).toEqual([await keyOf(user.id)]);
+    });
+
+    it("GET is 404 without v, or with another user's v", async () => {
+      const a = await signedIn();
+      const b = await signedIn();
+      const aUrl = (await upload(a.writeCookies, PNG).expect(200)).body.avatarUrl as string;
+      await upload(b.writeCookies, JPEG, 'b.jpg', 'image/jpeg').expect(200);
+      const missing = await http().get('/api/v1/users/me/avatar').set('Cookie', b.cookie).expect(404);
+      expect(missing.body.error.code).toBe('AVATAR_NOT_FOUND');
+      // B asking for A's URL must not get B's photo (it would be cached under A's URL).
+      await http().get(aUrl).set('Cookie', b.cookie).expect(404);
     });
 
     it('stores the type found in the bytes, not the one the client sent', async () => {

@@ -21,9 +21,12 @@ const profileSelect = {
   googleSubject: true,
 } as const;
 
-/** Each upload gets a new key, so its last segment busts the browser cache (specs/22 research D4). */
+/** The random uuid that ends each upload's key: unique system-wide, never a per-user counter (research D4). */
+export const avatarVersion = (key: string) => key.split('/').pop()!;
+
+/** A new photo gets a new URL, so the image can be cached for good; GET serves only this exact `v`. */
 export function avatarUrl(key: string | null): string | null {
-  return key ? `/api/v1/users/me/avatar?v=${key.split('/').pop()}` : null;
+  return key ? `/api/v1/users/me/avatar?v=${avatarVersion(key)}` : null;
 }
 
 @Injectable()

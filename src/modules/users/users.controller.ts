@@ -1,5 +1,5 @@
-import { Body, Controller, Delete, Get, HttpCode, Patch, Put, Req, Res, StreamableFile } from '@nestjs/common';
-import { ApiBody, ApiConsumes, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, HttpCode, Patch, Put, Query, Req, Res, StreamableFile } from '@nestjs/common';
+import { ApiBody, ApiConsumes, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { SessionUser } from '../../common/guards/session.guard';
@@ -58,11 +58,16 @@ export class UsersController {
   }
 
   @Get('avatar')
-  @ApiResponse({ status: 200, description: 'The image bytes; the `v` query parameter only busts caches.' })
+  @ApiQuery({ name: 'v', required: true, description: 'The version from `avatarUrl`; any other value is 404.' })
+  @ApiResponse({ status: 200, description: 'The image bytes (cached for good: one URL is always one image).' })
   @ApiResponse({ status: 401, description: 'No session, or SESSION_ENDED' })
-  @ApiResponse({ status: 404, description: 'AVATAR_NOT_FOUND' })
-  async getAvatar(@CurrentUser() user: SessionUser, @Res({ passthrough: true }) res: Response) {
-    const { body, contentType } = await this.avatar.get(user.id);
+  @ApiResponse({ status: 404, description: 'AVATAR_NOT_FOUND: no photo, or `v` missing or not the current one' })
+  async getAvatar(
+    @CurrentUser() user: SessionUser,
+    @Query('v') version: string | undefined,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { body, contentType } = await this.avatar.get(user.id, version);
     res.set({
       'Content-Type': contentType,
       // Safe to cache for good: a new photo has a new URL (`?v=`).

@@ -150,3 +150,20 @@ describe('AvatarService.remove', () => {
     expect(calls).toEqual(['update', 'delete old']);
   });
 });
+
+describe('AvatarService.get', () => {
+  it('serves the current version only', async () => {
+    const { service, images } = setup('avatars/u1/abc');
+    images.get.mockResolvedValue({
+      arrayBuffer: () => Promise.resolve(PNG.slice().buffer),
+      httpMetadata: { contentType: 'image/png' },
+    });
+    await expect(service.get('u1', 'abc')).resolves.toMatchObject({ contentType: 'image/png' });
+    for (const v of [undefined, 'old', 'ABC']) expect(await statusOf(service.get('u1', v))).toBe(404);
+  });
+
+  it('404 without an avatar', async () => {
+    const { service } = setup(null);
+    expect(await statusOf(service.get('u1', 'abc'))).toBe(404);
+  });
+});

@@ -10,7 +10,7 @@ import type { Request } from 'express';
 import { getBindings } from '../../cloudflare';
 import { PrismaService } from '../../database/prisma.service';
 import { AVATAR_MAX_BYTES, detectImageType } from './image-type';
-import { type Profile, ProfileService } from './profile.service';
+import { avatarVersion, type Profile, ProfileService } from './profile.service';
 import { AVATAR_BODY_LIMIT, payloadTooLarge, readBody } from './read-body';
 
 const invalidUpload = (message: string) => new BadRequestException({ code: 'VALIDATION_FAILED', message });
@@ -96,9 +96,13 @@ export class AvatarService {
     if (count === 1) await this.deleteObject(userId, oldKey);
   }
 
-  async get(userId: string): Promise<{ body: Buffer; contentType: string }> {
+  /**
+   * Only for the current `?v=`: the response is cached for good under its URL, so one URL must always mean one
+   * image, whoever is signed in (a stale URL from another account must not get this user's photo, or show theirs).
+   */
+  async get(userId: string, version: string | undefined): Promise<{ body: Buffer; contentType: string }> {
     const key = await this.currentKey(userId);
-    if (!key) throw avatarNotFound();
+    if (!key || !version || version !== avatarVersion(key)) throw avatarNotFound();
     const obj = await getBindings().IMAGES.get(key);
     if (!obj) throw avatarNotFound();
     // shortcut: reads the whole image (≤ 5 MB) into memory; stream it if larger images are ever served.

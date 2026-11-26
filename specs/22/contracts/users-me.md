@@ -48,8 +48,8 @@ The stored type is the one detected from the bytes. The previous photo is delete
 
 ## GET /users/me/avatar
 
-200 → image bytes, `Content-Type` as stored, `Cache-Control: private, max-age=31536000, immutable`, `Cross-Origin-Resource-Policy: same-site`. The `v` query parameter is ignored (cache buster).
+Query `v` (required): the version in `avatarUrl`. 200 → image bytes, `Content-Type` as stored, `Cache-Control: private, max-age=31536000, immutable`, `Cross-Origin-Resource-Policy: same-site`. Served only for the current `v`, so one URL is always one image. Use it in `<img src>`: the session cookie goes along because the frontend and API are on the same site.
 
 | Status | Code | When |
 |---|---|---|
-| 404 | `AVATAR_NOT_FOUND` | No photo (or the object is missing in storage) |
+| 404 | `AVATAR_NOT_FOUND` | No photo, `v` missing or not the current one (an old URL, another user's URL), or the object is missing in storage |
