@@ -2,12 +2,18 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../database/prisma.service';
 import { throttleKey } from '../throttle-key';
 
+/** `sign_in` is keyed by the lower-cased email, `change_password` by the user id. */
+export type AttemptScope = 'sign_in' | 'change_password';
+
 export const MAX_FAILURES = 5;
 export const LOCK_MINUTES = 15;
 
 /**
- * Sign-in lockout on auth_throttles. The key is a hash of the lower-cased email (the table never holds the
- * email) and rows exist for unknown emails too, so lockout does not reveal which accounts exist.
+ * Lockout on auth_throttles for sign-in and for the current-password check of change password (specs/22 D7).
+ * Each scope has its own rows, so a change-password lock never blocks sign-in.
+ *
+ * Sign-in: the key is a hash of the lower-cased email (the table never holds the email) and rows exist for unknown
+ * emails too, so lockout does not reveal which accounts exist.
  *
  * Attempts are counted BEFORE the password is checked, with one atomic increment, so parallel requests cannot
  * all slip past a check-then-count gap: at most MAX_FAILURES of them get their password verified.
@@ -17,13 +23,15 @@ export const LOCK_MINUTES = 15;
 export class SignInThrottleService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private key(email: string) {
-    return throttleKey('sign_in', email);
-  }
-
-  /** Counts this attempt. Returns false when the email is locked: the caller must not check the password. */
-  async attempt(email: string, now = new Date()): Promise<boolean> {
-    const key = this.key(email);
+  /** Counts this attempt. Returns false when the subject is locked: the caller must not check the password. */
+  async attempt(subject: string, scope: AttemptScope = 'sign_in', now = new Date()): Promise<boolean> {
+    const key = throttleKey(scope, subject);
+    // Failures older than LOCK_MINUTES since the last attempt no longer count ("5 within 15 minutes"). Without
+    // this, change-password failures (rarely reset) would add up for months. Conditional, so safe in parallel.
+    await this.prisma.authThrottle.updateMany({
+      where: { ...key, lockedUntil: null, updatedAt: { lt: new Date(now.getTime() - LOCK_MINUTES * 60_000) } },
+      data: { failedCount: 0 },
+    });
     const row = await this.prisma.authThrottle.upsert({
       where: { scope_subjectKey: key },
       create: { ...key, failedCount: 1 },
@@ -47,14 +55,14 @@ export class SignInThrottleService {
   }
 
   /** After a wrong password: locks when this was the last allowed attempt. */
-  async recordFailure(email: string, now = new Date()): Promise<void> {
-    const row = await this.prisma.authThrottle.findUnique({ where: { scope_subjectKey: this.key(email) } });
+  async recordFailure(subject: string, scope: AttemptScope = 'sign_in', now = new Date()): Promise<void> {
+    const row = await this.prisma.authThrottle.findUnique({ where: { scope_subjectKey: throttleKey(scope, subject) } });
     if (row && row.failedCount >= MAX_FAILURES && !row.lockedUntil) await this.lock(row.id, now);
   }
 
   /** Correct password, or the reset-password flow lifting the lock. */
-  async reset(email: string): Promise<void> {
-    await this.prisma.authThrottle.deleteMany({ where: this.key(email) });
+  async reset(subject: string, scope: AttemptScope = 'sign_in'): Promise<void> {
+    await this.prisma.authThrottle.deleteMany({ where: throttleKey(scope, subject) });
   }
 
   private lock(id: string, now: Date) {

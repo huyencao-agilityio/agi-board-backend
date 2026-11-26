@@ -1,9 +1,23 @@
-import { Body, Controller, Get, HttpCode, Post, Req, Res } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Req,
+  Res,
+} from '@nestjs/common';
 import { ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import type { SessionUser } from '../../common/guards/session.guard';
+import { AccountSecurityService } from './account/account-security.service';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { CheckResetLinkDto } from './dto/check-reset-link.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResendCodeDto } from './dto/resend-code.dto';
@@ -16,6 +30,11 @@ import { SessionService } from './session/session.service';
 import { SignInService } from './sign-in/sign-in.service';
 import { SignUpService } from './sign-up/sign-up.service';
 
+/** A list of messages, so the filter answers VALIDATION_FAILED like the ValidationPipe does. */
+const sessionIdPipe = new ParseUUIDPipe({
+  exceptionFactory: () => new BadRequestException(['sessionId must be a UUID']),
+});
+
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
@@ -24,6 +43,7 @@ export class AuthController {
     private readonly signUpService: SignUpService,
     private readonly passwordReset: PasswordResetService,
     private readonly sessions: SessionService,
+    private readonly accountSecurity: AccountSecurityService,
   ) {}
 
   // Public: a signed-out user must reach it. CSRF still applies to this write.
@@ -130,5 +150,49 @@ export class AuthController {
   @ApiResponse({ status: 403, description: 'CSRF_INVALID' })
   logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     return this.sessions.logout(req, res);
+  }
+
+  @Post('change-password')
+  @HttpCode(204)
+  @ApiResponse({ status: 204, description: 'Password replaced; other sessions ended, this one stays signed in.' })
+  @ApiResponse({
+    status: 400,
+    description: 'VALIDATION_FAILED (rules in `details`), PASSWORD_NOT_SET (Google-only) or CURRENT_PASSWORD_INCORRECT',
+  })
+  @ApiResponse({ status: 401, description: 'No session, or SESSION_ENDED' })
+  @ApiResponse({ status: 403, description: 'CSRF_INVALID' })
+  @ApiResponse({ status: 429, description: 'CHANGE_PASSWORD_LOCKED after 5 wrong current passwords, for 15 minutes' })
+  changePassword(@CurrentUser() user: SessionUser, @Body() dto: ChangePasswordDto) {
+    return this.accountSecurity.changePassword(user, dto);
+  }
+
+  @Get('sessions')
+  @ApiResponse({
+    status: 200,
+    description: '`items`: live sessions (id, userAgent, createdAt, lastActiveAt, isCurrent)',
+  })
+  @ApiResponse({ status: 401, description: 'No session, or SESSION_ENDED' })
+  listSessions(@CurrentUser() user: SessionUser) {
+    return this.accountSecurity.listSessions(user);
+  }
+
+  @Delete('sessions/:sessionId')
+  @HttpCode(204)
+  @ApiResponse({ status: 204, description: 'That session ended; its device gets SESSION_ENDED.' })
+  @ApiResponse({ status: 400, description: 'CURRENT_SESSION (use logout) or VALIDATION_FAILED (not a UUID)' })
+  @ApiResponse({ status: 401, description: 'No session, or SESSION_ENDED' })
+  @ApiResponse({ status: 403, description: 'CSRF_INVALID' })
+  @ApiResponse({ status: 404, description: 'SESSION_NOT_FOUND (unknown, ended or not yours)' })
+  endSession(@CurrentUser() user: SessionUser, @Param('sessionId', sessionIdPipe) sessionId: string) {
+    return this.accountSecurity.endSession(user, sessionId);
+  }
+
+  @Delete('sessions')
+  @HttpCode(204)
+  @ApiResponse({ status: 204, description: 'Every other live session ended (also when there were none).' })
+  @ApiResponse({ status: 401, description: 'No session, or SESSION_ENDED' })
+  @ApiResponse({ status: 403, description: 'CSRF_INVALID' })
+  endOtherSessions(@CurrentUser() user: SessionUser) {
+    return this.accountSecurity.endOtherSessions(user);
   }
 }

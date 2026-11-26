@@ -49,6 +49,7 @@ Personal data in this schema: `users.email`, `users.full_name`, `users.avatar_ob
 - Minimise: do not add a column, response field or log line holding personal data unless the spec needs it. Return another user's data only as far as the spec shows it (e.g. name and avatar of fellow members).
 - Never put emails, tokens or codes in URLs or query strings: `pino-http` logs `req.url`. Send them in a `POST` body.
 - `ip_address` and `user_agent` are shown only to their owner (the active-sessions list); no other endpoint returns them.
+- Avatars are served only to their owner (`GET /users/me/avatar`). Showing other users' avatars needs a permission rule (shares a workspace/board) or a public `avatars/` domain, decided with that feature (specs/22/research.md D4).
 - Admin-console and support endpoints return account fields only, never workspace/board content (CH-03).
 - Audit-log `details` hold ids and action data, not copies of content or other people's emails: audit rows are kept forever.
 - Personal data in error `details`, emails and notifications: only what the recipient is already allowed to see.

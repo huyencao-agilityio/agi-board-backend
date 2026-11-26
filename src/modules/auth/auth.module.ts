@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { EmailModule } from '../email/email.module';
+import { AccountSecurityService } from './account/account-security.service';
 import { AuthController } from './auth.controller';
 import { GoogleAuthController } from './google/google-auth.controller';
 import { GoogleOAuthService } from './google/google-oauth.service';
@@ -17,6 +18,7 @@ import { SignUpService } from './sign-up/sign-up.service';
   imports: [EmailModule],
   controllers: [AuthController, GoogleAuthController],
   providers: [
+    AccountSecurityService,
     EmailVerificationService,
     GoogleOAuthService,
     GoogleSignInService,
