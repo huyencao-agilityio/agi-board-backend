@@ -27,14 +27,16 @@ describe('SessionService', () => {
   const update = jest.fn<Promise<object>, [Update]>(() => Promise.resolve({}));
   const findUniqueOrThrow = jest.fn();
   const updateMany = jest.fn();
+  const findUnique = jest.fn();
   const cookie = jest.fn<void, [name: string, value: string, options: object]>();
-  const res = { cookie } as unknown as Response;
+  const clearCookie = jest.fn<void, [name: string, options: object]>();
+  const res = { cookie, clearCookie } as unknown as Response;
   let service: SessionService;
 
   beforeEach(() => {
     jest.clearAllMocks();
     service = new SessionService(
-      { user: { update, findUniqueOrThrow }, userSession: { updateMany } } as unknown as PrismaService,
+      { user: { update, findUniqueOrThrow }, userSession: { updateMany, findUnique } } as unknown as PrismaService,
       { get: (key: string) => CONFIG[key] } as unknown as ConfigService<Env, true>,
     );
   });
@@ -93,5 +95,45 @@ describe('SessionService', () => {
   it('me returns the same shape', async () => {
     findUniqueOrThrow.mockResolvedValueOnce(user);
     expect(await service.me('u1')).toEqual({ user: publicUser, next: 'home' });
+  });
+
+  describe('logout', () => {
+    const withCookie = (token?: string) => ({ cookies: token ? { agi_sid: token } : {} }) as unknown as Request;
+    const cleared = () => clearCookie.mock.calls.map(([name]) => name);
+
+    it('ends only the live session of the cookie with reason logout and clears both cookies', async () => {
+      updateMany.mockResolvedValueOnce({ count: 1 });
+      await service.logout(withCookie('tok'), res);
+      expect(updateMany).toHaveBeenCalledWith({
+        where: { tokenHash: hashSessionToken('tok'), endedAt: null },
+        data: { endedAt: expect.any(Date) as Date, endReason: 'logout' },
+      });
+      expect(findUnique).not.toHaveBeenCalled();
+      expect(cleared()).toEqual(['agi_sid', 'csrf_token']);
+      expect(clearCookie.mock.calls[0][1]).toMatchObject({ httpOnly: true, sameSite: 'lax', path: '/' });
+    });
+
+    it('answers an already-ended session without writing again, and still clears the cookies', async () => {
+      updateMany.mockResolvedValueOnce({ count: 0 });
+      findUnique.mockResolvedValueOnce({ id: 's1' });
+      await service.logout(withCookie('tok'), res);
+      expect(findUnique).toHaveBeenCalledWith({ where: { tokenHash: hashSessionToken('tok') }, select: { id: true } });
+      expect(updateMany).toHaveBeenCalledTimes(1);
+      expect(cleared()).toEqual(['agi_sid', 'csrf_token']);
+    });
+
+    it('rejects a token that matches no session and clears nothing', async () => {
+      updateMany.mockResolvedValueOnce({ count: 0 });
+      findUnique.mockResolvedValueOnce(null);
+      await expect(service.logout(withCookie('tok'), res)).rejects.toMatchObject({ status: 401 });
+      expect(clearCookie).not.toHaveBeenCalled();
+    });
+
+    it('rejects a request without a session cookie before any query', async () => {
+      await expect(service.logout(withCookie(), res)).rejects.toMatchObject({ status: 401 });
+      expect(updateMany).not.toHaveBeenCalled();
+      expect(findUnique).not.toHaveBeenCalled();
+      expect(clearCookie).not.toHaveBeenCalled();
+    });
   });
 });

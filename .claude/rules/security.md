@@ -12,6 +12,7 @@ Source: proposal §7 (Security NFR), risk R-02, and the guards already in `src/c
 ## Authentication and sessions
 
 - Every route needs a session by default (`SessionGuard`). `@Public()` only for routes a signed-out user must reach (sign-in, sign-up, verify, forgot/reset password, health). Each `@Public()` gets a one-line comment saying why.
+- One exception: `POST /auth/logout` is `@Public()` but checks the session cookie itself (401 without a known one), so an already-ended session still answers 204 (specs/54/research.md D1, approved by the project owner).
 - CSRF (`CsrfGuard`) stays on for every write, public routes included. Never skip it or add a bypass.
 - Session cookie: `httpOnly: true`, `sameSite: 'lax'`, `secure` in production, `path: '/'`. The cookie holds a random token from `newSessionToken()`; only `hashSessionToken(token)` is stored. Logout is `POST` only and sets `endedAt`.
 - Deactivated users (`deactivatedAt`) and ended sessions are rejected; keep that check when touching session code.

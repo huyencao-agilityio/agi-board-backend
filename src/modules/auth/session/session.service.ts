@@ -1,7 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
-import { setSessionCookie } from '../../../common/session-cookie';
+import { clearAuthCookies, setSessionCookie } from '../../../common/session-cookie';
 import { hashSessionToken, newSessionToken } from '../../../common/session-token';
 import type { Env } from '../../../config/env';
 import { PrismaService } from '../../../database/prisma.service';
@@ -68,6 +68,27 @@ export class SessionService {
     if (verifiedHash !== undefined) await this.refuseIfPasswordChanged(user.id, verifiedHash, tokenHash);
     setSessionCookie(res, this.config, token);
     return this.toResult(user);
+  }
+
+  /**
+   * Ends the cookie's own session (other devices stay signed in) and clears the cookies. Idempotent: an already-ended
+   * session answers 204 too and keeps its first end reason. No cookie or an unknown token is 401.
+   */
+  async logout(req: Request, res: Response): Promise<void> {
+    const token = (req.cookies as Record<string, string | undefined>)[
+      this.config.get('SESSION_COOKIE_NAME', { infer: true })
+    ];
+    if (!token) throw new UnauthorizedException();
+    const tokenHash = hashSessionToken(token);
+    const { count } = await this.prisma.userSession.updateMany({
+      where: { tokenHash, endedAt: null },
+      data: { endedAt: new Date(), endReason: 'logout' },
+    });
+    if (!count) {
+      const ended = await this.prisma.userSession.findUnique({ where: { tokenHash }, select: { id: true } });
+      if (!ended) throw new UnauthorizedException();
+    }
+    clearAuthCookies(res, this.config);
   }
 
   /** Checked after the session is stored: a reset before that is seen here, a reset after it ends the session itself. */
