@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { avatarUrl } from '../../common/avatar-url';
 import { PrismaService } from '../../database/prisma.service';
 
 export interface Profile {
@@ -20,14 +21,6 @@ const profileSelect = {
   passwordHash: true,
   googleSubject: true,
 } as const;
-
-/** The random uuid that ends each upload's key: unique system-wide, never a per-user counter (research D4). */
-export const avatarVersion = (key: string) => key.split('/').pop()!;
-
-/** A new photo gets a new URL, so the image can be cached for good; GET serves only this exact `v`. */
-export function avatarUrl(key: string | null): string | null {
-  return key ? `/api/v1/users/me/avatar?v=${avatarVersion(key)}` : null;
-}
 
 @Injectable()
 export class ProfileService {

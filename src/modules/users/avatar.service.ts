@@ -8,9 +8,10 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { getBindings } from '../../cloudflare';
+import { avatarVersion } from '../../common/avatar-url';
 import { PrismaService } from '../../database/prisma.service';
 import { AVATAR_MAX_BYTES, detectImageType } from './image-type';
-import { avatarVersion, type Profile, ProfileService } from './profile.service';
+import { type Profile, ProfileService } from './profile.service';
 import { AVATAR_BODY_LIMIT, payloadTooLarge, readBody } from './read-body';
 
 const invalidUpload = (message: string) => new BadRequestException({ code: 'VALIDATION_FAILED', message });

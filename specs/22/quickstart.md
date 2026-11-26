@@ -23,6 +23,7 @@ Expected e2e coverage (`test/profile.e2e-spec.ts`, `test/account-security.e2e-sp
 | `PATCH /users/me` `{ fullName: "  New  " }` | 200, `fullName: "New"`; `GET /auth/me` shows the new name |
 | `PATCH /users/me` `{ fullName: "   " }` | 400 `VALIDATION_FAILED` |
 | `PUT /users/me/avatar` multipart, field `file` = small PNG (supertest `.attach('file', buf, 'a.png')`) | 200, `avatarUrl` set; object exists in local R2; `GET` that URL → 200 `image/png`, same bytes, `Cross-Origin-Resource-Policy: same-site` |
+| `GET /auth/me` after upload / after `DELETE` | `user.avatarUrl` = the profile's `avatarUrl` / `null` |
 | Upload a second image | new `avatarUrl`; the first R2 object no longer exists; the old URL → 404 |
 | `GET /users/me/avatar` without `v`, or with another user's `v` | 404 `AVATAR_NOT_FOUND` |
 | PNG bytes in a part typed `image/jpeg` named `a.jpg` | 200, stored as `image/png` |

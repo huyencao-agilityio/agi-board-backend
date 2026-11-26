@@ -257,7 +257,7 @@ describe('Sign up and email verification (e2e)', () => {
       const res = await verify(lastCode()).expect(200);
       const user = await findUser();
       expect(res.body).toEqual({
-        user: { id: user.id, email, fullName: 'New User', systemRole: 'user' },
+        user: { id: user.id, email, fullName: 'New User', systemRole: 'user', avatarUrl: null },
         next: 'home',
       });
       expect(user.emailVerifiedAt).not.toBeNull();
@@ -450,7 +450,7 @@ describe('Sign up and email verification (e2e)', () => {
 
       const res = await signIn(oldPassword).expect(200);
       expect(res.body).toEqual({
-        user: { id: user.id, email, fullName: 'Old Name', systemRole: 'user' },
+        user: { id: user.id, email, fullName: 'Old Name', systemRole: 'user', avatarUrl: null },
         next: 'verify-email',
       });
       expect(sessionCookie(res)).toBeUndefined();

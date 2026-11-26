@@ -172,6 +172,20 @@ describe('Profile (e2e)', () => {
       expect(Buffer.compare(img.body as Buffer, PNG)).toBe(0);
     });
 
+    it('/auth/me returns the same avatarUrl, and null after removal', async () => {
+      const user = await signedIn();
+      const { avatarUrl } = (await upload(user.writeCookies, PNG).expect(200)).body as { avatarUrl: string };
+      const me = await http().get('/api/v1/auth/me').set('Cookie', user.cookie).expect(200);
+      expect(me.body.user.avatarUrl).toBe(avatarUrl);
+      await http()
+        .delete('/api/v1/users/me/avatar')
+        .set('Cookie', user.writeCookies)
+        .set('X-CSRF-Token', csrf)
+        .expect(204);
+      const after = await http().get('/api/v1/auth/me').set('Cookie', user.cookie).expect(200);
+      expect(after.body.user.avatarUrl).toBeNull();
+    });
+
     it('a second upload gets a new URL and deletes the first object', async () => {
       const user = await signedIn();
       const first = await upload(user.writeCookies, PNG).expect(200);

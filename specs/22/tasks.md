@@ -160,6 +160,8 @@ Repo root: `/home/huyencao/Documents/training/agi-board/agi-board-backend-22/`. 
 
 - [X] T032 [US2] Serve `GET /users/me/avatar` only for the current `?v=` (404 otherwise) in `src/modules/users/avatar.service.ts` / `users.controller.ts`, with the shared `avatarVersion()` in `profile.service.ts`; unit and e2e cases; research D4 (also the same-site requirement for the cookie on `<img>`), contract and quickstart updated
 
+- [X] T033 [US2] Add `avatarUrl` to `user` in sign-in results (`/auth/me`, sign-in, verify-email, Google) via `src/modules/auth/session/session.service.ts` and `signedInUserSelect`; move `avatarUrl()`/`avatarVersion()` to `src/common/avatar-url.ts`; update `auth`/`sign-up` e2e shapes, add a `/auth/me` case in `test/profile.e2e-spec.ts`; research D11
+
 ---
 
 ## Dependencies & Execution Order

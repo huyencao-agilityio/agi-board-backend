@@ -62,6 +62,10 @@ Decisions taken while planning. Clarifications Q1–Q5 in `spec.md` are inputs, 
 
 - **Decision:** `GET /users/me` and `PATCH /users/me` `{ fullName }` both return `{ id, email, fullName, avatarUrl, hasPassword, googleLinked }`. `fullName` trimmed, `@IsNotEmpty` (same as sign-up; DB CHECK `trim(full_name) <> ''`); no max length: BRD `requirements.md` decision #36 says Full name has no maximum, on sign-up and in Profile (security review L1 was closed on that basis). `hasPassword` / `googleLinked` are booleans from `passwordHash` / `googleSubject`; the hash and Google subject are never returned. The email is not editable.
 
+## D11. `avatarUrl` in the signed-in user (`/auth/me`)
+
+- **Decision:** the `user` object of every sign-in result (`GET /auth/me`, sign-in, verify-email, Google callback; one shape from `SessionService.toResult`) also carries `avatarUrl` (same value as `GET /users/me`, `null` for initials). The header shows the photo app-wide without a second call. `avatarUrl()` / `avatarVersion()` live in `src/common/avatar-url.ts`, used by the auth and users modules (no cross-module import). `signedInUserSelect` gains `avatarObjectKey`.
+
 ## D10. Deferred after review
 
 - Audit log rows for change password and ending sessions (security review M2): BRD §10 lists admin actions only, and no self-service flow (reset, logout) writes audit rows yet. Moved to Trello card #56 "Decide and implement audit log for self-service account security actions", which asks the project owner first.

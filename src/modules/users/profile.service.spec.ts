@@ -1,11 +1,5 @@
 import type { PrismaService } from '../../database/prisma.service';
-import { avatarUrl, ProfileService } from './profile.service';
-
-describe('avatarUrl', () => {
-  it('is null without a key', () => expect(avatarUrl(null)).toBeNull());
-  it('uses the last key segment as cache buster', () =>
-    expect(avatarUrl('avatars/u1/abc')).toBe('/api/v1/users/me/avatar?v=abc'));
-});
+import { ProfileService } from './profile.service';
 
 describe('ProfileService', () => {
   const row = {

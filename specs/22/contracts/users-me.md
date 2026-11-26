@@ -15,7 +15,7 @@ All routes need a session (401 without one, 401 `SESSION_ENDED` for an ended one
 }
 ```
 
-`avatarUrl` is `null` when there is no photo (the frontend shows initials).
+`avatarUrl` is `null` when there is no photo (the frontend shows initials). The same `avatarUrl` is in `user` of `GET /auth/me` (and of sign-in, verify-email and the Google callback), so the header can show the photo without calling `/users/me`.
 
 ## GET /users/me
 
