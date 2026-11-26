@@ -13,8 +13,9 @@ const user = {
   fullName: 'Ann',
   systemRole: 'user' as const,
   emailVerifiedAt: new Date(),
+  avatarObjectKey: null as string | null,
 };
-const publicUser = { id: 'u1', email: 'a@e2e.test', fullName: 'Ann', systemRole: 'user' };
+const publicUser = { id: 'u1', email: 'a@e2e.test', fullName: 'Ann', systemRole: 'user', avatarUrl: null };
 
 const request = (headers: Record<string, string>, ip?: string) =>
   ({ ip, get: (name: string) => headers[name] }) as unknown as Request;

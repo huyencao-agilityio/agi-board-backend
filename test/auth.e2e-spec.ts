@@ -58,7 +58,7 @@ describe('Auth sign-in (e2e)', () => {
       const res = await signIn({ email: 'ok@auth.e2e.test', password }).expect(200);
 
       expect(res.body).toEqual({
-        user: { id: user.id, email: 'ok@auth.e2e.test', fullName: 'E2E User', systemRole: 'user' },
+        user: { id: user.id, email: 'ok@auth.e2e.test', fullName: 'E2E User', systemRole: 'user', avatarUrl: null },
         next: 'home',
       });
       expect(JSON.stringify(res.body)).not.toContain('passwordHash');
@@ -175,7 +175,7 @@ describe('Auth sign-in (e2e)', () => {
       const cookie = cookieOf(await signIn({ email: 'me@auth.e2e.test', password }).expect(200));
       const res = await request(app.getHttpServer()).get('/api/v1/auth/me').set('Cookie', cookie).expect(200);
       expect(res.body).toEqual({
-        user: { id: user.id, email: 'me@auth.e2e.test', fullName: 'E2E User', systemRole: 'user' },
+        user: { id: user.id, email: 'me@auth.e2e.test', fullName: 'E2E User', systemRole: 'user', avatarUrl: null },
         next: 'home',
       });
     });

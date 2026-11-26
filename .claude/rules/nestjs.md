@@ -42,6 +42,7 @@ Layering, global auth and the error envelope are defined in `AGENTS.md`; this fi
 ## Lists and pagination
 
 - List endpoints take `?limit=&cursor=` (cursor = last UUIDv7 id seen), default and maximum limit set in the DTO, and return `{ items, nextCursor }`. No offset pagination.
+- One exception: `GET /auth/sessions` returns all of a user's live sessions as `{ items }` (a handful per user; specs/22/research.md D8).
 
 ## Config
 

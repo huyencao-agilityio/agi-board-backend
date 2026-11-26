@@ -42,6 +42,12 @@ export class AllExceptionsFilter implements ExceptionFilter {
       if (exception.code === 'P2002') return [409, { error: { code: 'CONFLICT', message: 'Resource already exists' } }];
       if (exception.code === 'P2025') return [404, { error: { code: 'NOT_FOUND', message: 'Resource not found' } }];
     }
+    // Body-parser errors (e.g. a JSON body over the size limit) are not HttpExceptions but carry a safe 4xx status.
+    const parserError = exception as { expose?: unknown; status?: unknown } | null;
+    const status = parserError?.status;
+    if (parserError?.expose === true && typeof status === 'number' && status >= 400 && status < 500) {
+      return [status, { error: { code: HttpStatus[status] ?? 'BAD_REQUEST', message: 'Invalid request body' } }];
+    }
     return [500, { error: { code: 'INTERNAL_SERVER_ERROR', message: 'Internal server error' } }];
   }
 }

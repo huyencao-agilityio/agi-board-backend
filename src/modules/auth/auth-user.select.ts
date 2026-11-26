@@ -5,6 +5,7 @@ export const signedInUserSelect = {
   fullName: true,
   systemRole: true,
   emailVerifiedAt: true,
+  avatarObjectKey: true,
 } as const;
 
 /** For flows that check or replace the password. */

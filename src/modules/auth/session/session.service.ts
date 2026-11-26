@@ -1,6 +1,7 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
+import { avatarUrl } from '../../../common/avatar-url';
 import { clearAuthCookies, setSessionCookie } from '../../../common/session-cookie';
 import { hashSessionToken, newSessionToken } from '../../../common/session-token';
 import type { Env } from '../../../config/env';
@@ -15,10 +16,14 @@ export interface SignedInUser {
   fullName: string;
   systemRole: SystemRole;
   emailVerifiedAt: Date | null;
+  avatarObjectKey: string | null;
 }
 
 export interface SignInResult {
-  user: Pick<SignedInUser, 'id' | 'email' | 'fullName' | 'systemRole'>;
+  user: Pick<SignedInUser, 'id' | 'email' | 'fullName' | 'systemRole'> & {
+    /** `null` = no photo, the frontend shows initials. Same URL as in `GET /users/me`. */
+    avatarUrl: string | null;
+  };
   /** Where the frontend goes next: `home` is WEB-03, `verify-email` is WEB-16. */
   next: 'home' | 'verify-email';
 }
@@ -107,7 +112,13 @@ export class SessionService {
 
   toResult(user: SignedInUser): SignInResult {
     return {
-      user: { id: user.id, email: user.email, fullName: user.fullName, systemRole: user.systemRole },
+      user: {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        systemRole: user.systemRole,
+        avatarUrl: avatarUrl(user.avatarObjectKey),
+      },
       next: user.emailVerifiedAt ? 'home' : 'verify-email',
     };
   }

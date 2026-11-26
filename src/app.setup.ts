@@ -6,13 +6,15 @@ import type { Request, Response } from 'express';
 import helmet from 'helmet';
 import { docsEnabled, type Env } from './config/env';
 
+const API_PREFIX = 'api/v1';
+
 /** HTTP setup shared by main.ts and the e2e tests. Guards, pipes and filters are in AppModule. */
 export function setupApp(app: INestApplication) {
   const config = app.get(ConfigService<Env, true>);
   app.use(helmet());
   app.use(cookieParser());
   app.enableCors({ origin: config.get('APP_ORIGIN', { infer: true }), credentials: true });
-  app.setGlobalPrefix('api/v1');
+  app.setGlobalPrefix(API_PREFIX);
   app.enableShutdownHooks();
 
   if (docsEnabled(config.get('NODE_ENV', { infer: true }), config.get('ENABLE_DOCS', { infer: true }))) {
@@ -21,8 +23,11 @@ export function setupApp(app: INestApplication) {
       new DocumentBuilder()
         .setTitle('AGI Board API')
         .setVersion('v1')
+        // The prefix is shown once as the server; "Try it out" still calls /api/v1/...
+        .addServer(`/${API_PREFIX}`)
         .addCookieAuth(config.get('SESSION_COOKIE_NAME', { infer: true }))
         .build(),
+      { ignoreGlobalPrefix: true },
     );
     // Nest's UI serves files from swagger-ui-dist, which a Worker cannot read; the JSON is at /api/docs-json.
     SwaggerModule.setup('api/docs', app, doc, { swaggerUiEnabled: false });
