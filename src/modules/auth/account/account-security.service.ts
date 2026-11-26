@@ -23,6 +23,9 @@ export interface ActiveSession {
 const currentPasswordIncorrect = () =>
   new BadRequestException({ code: 'CURRENT_PASSWORD_INCORRECT', message: 'The current password is not correct.' });
 
+/** One more entry in the new-password rule list, only for change password (the others are in password-rules.ts). */
+export const SAME_AS_CURRENT = 'password must differ from the current password';
+
 /** Raw SQL bypasses Prisma, which stores dates in this form. */
 const sqlDate = (date: Date) => date.toISOString().replace('Z', '+00:00');
 
@@ -59,6 +62,8 @@ export class AccountSecurityService {
     // The right password is not a failure (as in sign-in): weak new passwords must not lock the owner out.
     await this.throttle.reset(user.id, 'change_password');
     const failed = failedPasswordRules(dto.newPassword, account.email);
+    // The current password was just verified, so plain equality means "unchanged" without another hash (PO, 2026-11-26).
+    if (dto.newPassword === dto.currentPassword) failed.push(SAME_AS_CURRENT);
     if (failed.length > 0) throw new BadRequestException(failed);
 
     const newHash = await this.passwords.hash(dto.newPassword);

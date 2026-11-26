@@ -34,6 +34,7 @@ Expected e2e coverage (`test/profile.e2e-spec.ts`, `test/account-security.e2e-sp
 | Wrong current password | 400 `CURRENT_PASSWORD_INCORRECT`, hash unchanged, no session ended |
 | 6th try after 5 wrong | 429 `CHANGE_PASSWORD_LOCKED`; sign-in with the old password still works |
 | Weak new password | 400 `VALIDATION_FAILED` with rule messages |
+| New password equal to the current one | 400 `VALIDATION_FAILED`, `details` = the "must differ" message; no session ended |
 | Google-only account | 400 `PASSWORD_NOT_SET` |
 | `GET /auth/sessions` with 2 sessions | 2 items, exactly one `isCurrent`, no `ipAddress`; ended and idle-expired sessions absent |
 | `DELETE /auth/sessions/:otherId` | 204; that session → 401 `SESSION_ENDED` |

@@ -154,6 +154,12 @@ Repo root: `/home/huyencao/Documents/training/agi-board/agi-board-backend-22/`. 
 
 ---
 
+## Phase 8: Follow-up (PO decision 2026-11-26)
+
+- [X] T031 [US3] Refuse a new password equal to the current one in `src/modules/auth/account/account-security.service.ts` (`SAME_AS_CURRENT` added to the rule list, before hashing); unit case in `account-security.service.spec.ts`, e2e case in `test/account-security.e2e-spec.ts`; spec, research D6, contract and quickstart updated
+
+---
+
 ## Dependencies & Execution Order
 
 - **Setup (T001–T002)** → **Foundational (T003–T005)** → stories.

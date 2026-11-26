@@ -31,6 +31,7 @@ Implement core functionality to support user workflows and system requirements.
 - Users can upload profile photo
 - Password change requires current password verification
 - Password must meet strength requirements
+- New password must differ from the current password (confirmed by the PO on 2026-11-26)
 - Password change signs out other sessions
 - Google sign-in status shown but not modifiable
 - Active sessions can be listed and individually signed out
@@ -46,6 +47,7 @@ Implement core functionality to support user workflows and system requirements.
 - Q: Should the session list return the raw user agent or parsed browser/OS? → A: Raw `userAgent`, `lastActiveAt`, `createdAt`, `isCurrent`; the frontend parses it (no IP returned).
 - Q: How are repeated wrong current-password attempts on password change handled? → A: Separate rate limit on the change-password endpoint (5 wrong attempts / 15 minutes per user → 429); the account is not locked.
 - Q: When an avatar is replaced or removed, is the old R2 object deleted? → A: Yes, right after the database update succeeds; a failed R2 delete is only logged, not returned as an error.
+- Q: Should the backend refuse a new password equal to the current one? → A: Yes (PO, 2026-11-26): 400 `VALIDATION_FAILED` with the rule message `password must differ from the current password` (proposed), listed with the other new-password rules.
 
 ---
 
@@ -58,6 +60,7 @@ Implement core functionality to support user workflows and system requirements.
 ### 2. Manage account security
 - [ ] **Given** account has a password, **When** user opens password section, **Then** current password field appears.
 - [ ] **Given** current password verified, **When** user enters new password meeting requirements, **Then** password is updated and other sessions are signed out.
+- [ ] (clarified) **Given** current password verified, **When** the new password equals the current one, **Then** the change is refused and nothing changes.
 - [ ] (clarified) **Given** user enters a wrong current password 5 times within 15 minutes, **When** they try again, **Then** the request is rejected with 429 and the account is not locked (sign-in still works).
 
 ### 3. Manage active sessions

@@ -8,7 +8,7 @@ Body `{ "currentPassword": "...", "newPassword": "..." }` (both strings, not emp
 
 | Status | Code | When |
 |---|---|---|
-| 400 | `VALIDATION_FAILED` | Missing/unknown fields, `currentPassword` over 128 characters; or `newPassword` breaks a rule (one `details` entry per rule, same messages as sign-up/reset) |
+| 400 | `VALIDATION_FAILED` | Missing/unknown fields, `currentPassword` over 128 characters; or `newPassword` breaks a rule (one `details` entry per rule, same messages as sign-up/reset, plus `password must differ from the current password` when it equals the current one) |
 | 400 | `PASSWORD_NOT_SET` | The account has no password (Google-only) |
 | 400 | `CURRENT_PASSWORD_INCORRECT` | Wrong current password (counted toward the limit) |
 | 429 | `CHANGE_PASSWORD_LOCKED` | 5 wrong current passwords within 15 minutes; sign-in is not affected. A right current password clears the count |

@@ -5,7 +5,7 @@ import type { Env } from '../../../config/env';
 import type { PrismaService } from '../../../database/prisma.service';
 import type { PasswordService } from '../password/password.service';
 import type { SignInThrottleService } from '../sign-in/sign-in-throttle.service';
-import { AccountSecurityService } from './account-security.service';
+import { AccountSecurityService, SAME_AS_CURRENT } from './account-security.service';
 
 const user: SessionUser = { id: 'u1', email: 'jane@example.com', fullName: 'J', systemRole: 'user', sessionId: 's1' };
 const dto = { currentPassword: 'old-pass1', newPassword: 'new-pass2' };
@@ -72,6 +72,14 @@ describe('AccountSecurityService', () => {
       // The current password was right, so it is not counted as a failure.
       expect(throttle.reset).toHaveBeenCalledWith('u1', 'change_password');
       expect(throttle.recordFailure).not.toHaveBeenCalled();
+    });
+
+    it('400 when the new password equals the current one, before hashing', async () => {
+      await expect(
+        service.changePassword(user, { currentPassword: 'same-pass1', newPassword: 'same-pass1' }),
+      ).rejects.toMatchObject({ status: 400, response: { message: [SAME_AS_CURRENT] } });
+      expect(passwords.hash).not.toHaveBeenCalled();
+      expect(batch).not.toHaveBeenCalled();
     });
 
     it('400 PASSWORD_NOT_SET for a Google-only account, without counting an attempt', async () => {

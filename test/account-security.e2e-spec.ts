@@ -164,6 +164,16 @@ describe('Change password and active sessions (e2e)', () => {
       }
     });
 
+    it('400 VALIDATION_FAILED when the new password is the current one; nothing changes', async () => {
+      const user = await makeUser('same');
+      const a = await signIn(user.email);
+      const b = await signIn(user.email);
+      const res = await change(a.cookie!, { currentPassword: password, newPassword: password }).expect(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.details).toEqual(['password must differ from the current password']);
+      await me(b.cookie!).expect(200);
+    });
+
     it('400 PASSWORD_NOT_SET for a Google-only account', async () => {
       const user = await makeUser('google', { passwordHash: null, googleSubject: `g-${Date.now()}` });
       const { cookie } = await openSession(user.id);
