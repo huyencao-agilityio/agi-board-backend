@@ -120,4 +120,15 @@ export class AuthController {
   me(@CurrentUser() user: SessionUser) {
     return this.sessions.me(user.id);
   }
+
+  // Public so an already-ended session still gets 204; the service requires a known session cookie. CSRF still applies.
+  @Public()
+  @Post('logout')
+  @HttpCode(204)
+  @ApiResponse({ status: 204, description: 'Session ended (or already ended); session and CSRF cookies cleared.' })
+  @ApiResponse({ status: 401, description: 'No session cookie, or a token matching no session' })
+  @ApiResponse({ status: 403, description: 'CSRF_INVALID' })
+  logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    return this.sessions.logout(req, res);
+  }
 }

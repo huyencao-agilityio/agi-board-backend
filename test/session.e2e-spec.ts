@@ -7,6 +7,7 @@ import { setupApp } from '../src/app.setup';
 import { hashSessionToken, newSessionToken } from '../src/common/session-token';
 import { PrismaService } from '../src/database/prisma.service';
 import type { SessionEndReason } from '../src/generated/prisma/enums';
+import { PasswordService } from '../src/modules/auth/password/password.service';
 
 /** Test-only route behind SessionGuard. */
 @Controller('probe')
@@ -118,5 +119,102 @@ describe('Session lifetime and ended sessions (e2e)', () => {
     const after = await prisma.userSession.findUniqueOrThrow({ where: { id: sessionId } });
     expect(after.lastActiveAt).toEqual(before.lastActiveAt);
     expect(res.headers['set-cookie']?.toString() ?? '').not.toContain('agi_sid=');
+  });
+
+  describe('POST /auth/logout', () => {
+    const csrf = 'logout-csrf-token';
+    const password = 'Logout-pass-1';
+
+    const logout = (session?: string, csrfHeader: string | null = csrf) => {
+      const cookies = [`csrf_token=${csrf}`, ...(session ? [session] : [])].join('; ');
+      const req = request(app.getHttpServer()).post('/api/v1/auth/logout').set('Cookie', cookies);
+      return csrfHeader === null ? req : req.set('X-CSRF-Token', csrfHeader);
+    };
+    const authMe = (cookie: string) => request(app.getHttpServer()).get('/api/v1/auth/me').set('Cookie', cookie);
+    const sessionRow = (tokenCookie: string) =>
+      prisma.userSession.findUniqueOrThrow({ where: { tokenHash: hashSessionToken(tokenCookie.split('=')[1]) } });
+    const setCookies = (res: request.Response) => (res.headers['set-cookie'] as unknown as string[] | undefined) ?? [];
+    const clearedCookie = (res: request.Response, name: string) =>
+      setCookies(res).find((c) => c.startsWith(`${name}=;`) && c.includes('Path=/') && c.includes('1970'));
+
+    /** Signs in through the real endpoint and returns the `agi_sid=<token>` cookie. */
+    const signIn = async (email = 'logout@session.e2e.test') => {
+      await prisma.user.upsert({
+        where: { email },
+        create: {
+          email,
+          fullName: 'Logout User',
+          passwordHash: await app.get(PasswordService).hash(password),
+          emailVerifiedAt: new Date(),
+        },
+        update: {},
+      });
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/auth/sign-in')
+        .set('Cookie', `csrf_token=${csrf}`)
+        .set('X-CSRF-Token', csrf)
+        .send({ email, password })
+        .expect(200);
+      return setCookies(res)
+        .find((c) => c.startsWith('agi_sid='))!
+        .split(';')[0];
+    };
+
+    it('ends the session with reason logout, answers 204 and clears both cookies', async () => {
+      const session = await signIn();
+      const res = await logout(session).expect(204);
+      const row = await sessionRow(session);
+      expect(row.endedAt).not.toBeNull();
+      expect(row.endReason).toBe('logout');
+      expect(clearedCookie(res, 'agi_sid')).toContain('HttpOnly');
+      expect(clearedCookie(res, 'csrf_token')).toBeDefined();
+    });
+
+    it('answers a plain 401 on protected routes with the logged-out cookie', async () => {
+      const session = await signIn();
+      await logout(session).expect(204);
+      const res = await authMe(session).expect(401);
+      expect(res.body.error.code).toBe('UNAUTHORIZED');
+    });
+
+    it.each([
+      ['without', null],
+      ['with a wrong', 'wrong-token'],
+    ])('rejects logout %s CSRF header and keeps the session live', async (_label, header) => {
+      const session = await signIn();
+      const res = await logout(session, header).expect(403);
+      expect(res.body.error.code).toBe('CSRF_INVALID');
+      expect((await sessionRow(session)).endedAt).toBeNull();
+    });
+
+    it('keeps the other sessions of the user signed in', async () => {
+      const first = await signIn();
+      const second = await signIn();
+      await logout(first).expect(204);
+      await authMe(second).expect(200);
+    });
+
+    it('answers 204 again for the same session and leaves the row unchanged', async () => {
+      const session = await signIn();
+      await logout(session).expect(204);
+      const before = await sessionRow(session);
+      const res = await logout(session).expect(204);
+      const after = await sessionRow(session);
+      expect(after.endedAt).toEqual(before.endedAt);
+      expect(clearedCookie(res, 'agi_sid')).toBeDefined();
+    });
+
+    it('answers 204 for a session ended by something else and keeps its end reason', async () => {
+      const { cookie, sessionId } = await makeSession({ endReason: 'password_reset' });
+      const res = await logout(cookie).expect(204);
+      const row = await prisma.userSession.findUniqueOrThrow({ where: { id: sessionId } });
+      expect(row.endReason).toBe('password_reset');
+      expect(clearedCookie(res, 'csrf_token')).toBeDefined();
+    });
+
+    it('answers 401 without a session cookie or with an unknown token', async () => {
+      expect((await logout().expect(401)).body.error.code).toBe('UNAUTHORIZED');
+      expect((await logout('agi_sid=unknown').expect(401)).body.error.code).toBe('UNAUTHORIZED');
+    });
   });
 });
