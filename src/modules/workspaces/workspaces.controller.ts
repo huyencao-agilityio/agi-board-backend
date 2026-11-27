@@ -15,7 +15,8 @@ export class WorkspacesController {
   @ApiResponse({ status: 201, description: 'The new workspace tile; the caller is its admin.' })
   @ApiResponse({
     status: 400,
-    description: 'VALIDATION_FAILED (name missing, empty after trim or over 100 characters, unknown field)',
+    description:
+      'VALIDATION_FAILED (name missing, blank after line breaks are replaced and trimmed, over 100 characters, unknown field)',
   })
   create(@CurrentUser() user: SessionUser, @Body() dto: CreateWorkspaceDto) {
     return this.workspaces.create(user, dto.name);
