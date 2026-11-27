@@ -74,10 +74,21 @@ describe('Password reset (e2e)', () => {
     await prisma.userSession.create({ data: { userId, tokenHash: hashSessionToken(token), ...data } });
     return token;
   };
+  /** The user's audit rows as `[action, data]`, after checking the fields every self-service row shares. */
+  const audits = async (userId: string) => {
+    const rows = await prisma.auditLogEntry.findMany({ where: { actorId: userId } });
+    for (const row of rows) {
+      expect(row).toMatchObject({ workspaceId: null, targetId: userId, targetType: 'user', actorName: 'Person' });
+      expect(row.targetLabel).toBe('Person');
+    }
+    return rows.map((r) => [r.action, typeof r.data === 'string' ? (JSON.parse(r.data) as unknown) : r.data]);
+  };
   const me = (token: string) => request(app.getHttpServer()).get('/api/v1/auth/me').set('Cookie', `agi_sid=${token}`);
 
   const emails = [email, `other${domain}`, `ghost${domain}`];
   const cleanUp = async () => {
+    // Audit rows reference their actor (no cascade), so they go first.
+    await prisma.auditLogEntry.deleteMany({ where: { actor: { email: { endsWith: domain } } } });
     await prisma.user.deleteMany({ where: { email: { endsWith: domain } } });
     await prisma.authThrottle.deleteMany({ where: { subjectKey: { in: emails.map(subjectKey) } } });
   };
@@ -295,6 +306,7 @@ describe('Password reset (e2e)', () => {
       expect(row.usedAt).toBeInstanceOf(Date);
       expect(Math.abs(row.usedAt!.getTime() - Date.now())).toBeLessThan(60_000);
       expect((await findUser()).updatedAt.getTime()).toBeGreaterThanOrEqual(user.updatedAt.getTime());
+      expect(await audits(user.id)).toEqual([['password_reset_completed', {}]]); // the refused second use adds none
     });
 
     it('writes dates in the same form as Prisma', async () => {
@@ -434,6 +446,7 @@ describe('Password reset (e2e)', () => {
       expect(results.map((r) => r.status).sort()).toEqual([200, 400, 400]);
       const winner = passwords[results.findIndex((r) => r.status === 200)];
       expect((await signIn(winner)).status).toBe(200);
+      expect(await audits(user.id)).toEqual([['password_reset_completed', {}]]);
     });
 
     it.each<[string, (userId: string) => Promise<unknown>]>([
@@ -469,6 +482,7 @@ describe('Password reset (e2e)', () => {
       expect((await findUser()).passwordHash).toBe(changed);
       expect(await prisma.userSession.count({ where: { userId: user.id, endedAt: null } })).toBe(1);
       expect((await tokenRows())[0].usedAt).toBeNull();
+      expect(await audits(user.id)).toEqual([]);
       expect((await signIn(oldPassword)).status).toBe(429);
     });
   });

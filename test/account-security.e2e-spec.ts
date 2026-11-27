@@ -38,6 +38,8 @@ describe('Change password and active sessions (e2e)', () => {
   async function cleanUp() {
     const users = await prisma.user.findMany({ where: { email: { endsWith: DOMAIN } }, select: { id: true } });
     for (const { id } of users) await prisma.authThrottle.deleteMany({ where: throttleKey('change_password', id) });
+    // Audit rows reference their actor (no cascade), so they go first.
+    await prisma.auditLogEntry.deleteMany({ where: { actorId: { in: users.map((u) => u.id) } } });
     await prisma.user.deleteMany({ where: { email: { endsWith: DOMAIN } } });
   }
 
@@ -88,6 +90,21 @@ describe('Change password and active sessions (e2e)', () => {
 
   const me = (cookie: string) => http().get('/api/v1/auth/me').set('Cookie', cookie);
 
+  /** The user's audit rows as `[action, data]`, after checking the fields every self-service row shares. */
+  async function audits(userId: string) {
+    const rows = await prisma.auditLogEntry.findMany({ where: { actorId: userId }, orderBy: { createdAt: 'asc' } });
+    for (const row of rows) {
+      expect(row).toMatchObject({
+        workspaceId: null,
+        targetId: userId,
+        targetType: 'user',
+        actorName: 'Account User',
+        targetLabel: 'Account User',
+      });
+    }
+    return rows.map((r) => [r.action, typeof r.data === 'string' ? (JSON.parse(r.data) as unknown) : r.data]);
+  }
+
   describe('POST /auth/change-password', () => {
     const change = (cookie: string | null, body: unknown, withCsrf = true) => {
       const req = http()
@@ -112,6 +129,7 @@ describe('Change password and active sessions (e2e)', () => {
       expect(reasons).toEqual([{ endReason: 'password_changed' }]);
       expect((await signIn(user.email)).status).toBe(401);
       expect((await signIn(user.email, newPassword)).status).toBe(200);
+      expect(await audits(user.id)).toEqual([['password_changed', {}]]);
     });
 
     it('400 CURRENT_PASSWORD_INCORRECT for a wrong current password; nothing changes', async () => {
@@ -122,6 +140,7 @@ describe('Change password and active sessions (e2e)', () => {
       expect(res.body.error.code).toBe('CURRENT_PASSWORD_INCORRECT');
       expect((await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).passwordHash).toBe(passwordHash);
       await me(b.cookie!).expect(200);
+      expect(await audits(user.id)).toEqual([]);
     });
 
     it('429 CHANGE_PASSWORD_LOCKED after 5 wrong tries; sign-in still works', async () => {
@@ -151,6 +170,45 @@ describe('Change password and active sessions (e2e)', () => {
         .expect(400);
       expect(res.body.error.code).toBe('RESET_LINK_INVALID');
       expect((await signIn(user.email, newPassword)).status).toBe(200);
+    });
+
+    it('writes no audit row when the password is replaced between the check and the batch', async () => {
+      const user = await makeUser('lostrace');
+      const a = await signIn(user.email);
+      const passwords = app.get(PasswordService);
+      const hash = passwords.hash.bind(passwords);
+      // Runs after the current password was verified, before the batch: the batch's guard must see the change.
+      jest.spyOn(passwords, 'hash').mockImplementationOnce(async (p) => {
+        await prisma.user.update({ where: { id: user.id }, data: { passwordHash: 'replaced' } });
+        return hash(p);
+      });
+      const res = await change(a.cookie!, { currentPassword: password, newPassword }).expect(400);
+      expect(res.body.error.code).toBe('CURRENT_PASSWORD_INCORRECT');
+      expect(await audits(user.id)).toEqual([]);
+      jest.restoreAllMocks();
+    });
+
+    it('a change racing a reset: only the request that won writes an audit row', async () => {
+      const user = await makeUser('race');
+      const a = await signIn(user.email);
+      const token = newSessionToken();
+      await prisma.passwordResetToken.create({
+        data: { userId: user.id, tokenHash: hashSessionToken(token), expiresAt: new Date(Date.now() + 30 * 60_000) },
+      });
+      const [changed, reset] = await Promise.all([
+        change(a.cookie!, { currentPassword: password, newPassword }),
+        http()
+          .post('/api/v1/auth/reset-password')
+          .set('Cookie', csrfCookie)
+          .set('X-CSRF-Token', csrf)
+          .send({ token, password: 'reset-pass-77' }),
+      ]);
+      const expected = [
+        ...(changed.status === 204 ? [['password_changed', {}]] : []),
+        ...(reset.status < 300 ? [['password_reset_completed', {}]] : []),
+      ];
+      expect(expected).toHaveLength(1); // one wins: a change voids the link, a reset replaces the verified hash
+      expect(await audits(user.id)).toEqual(expected);
     });
 
     it('400 VALIDATION_FAILED with the broken rules for weak new passwords, never 429 with the right current one', async () => {
@@ -234,13 +292,15 @@ describe('Change password and active sessions (e2e)', () => {
     it('DELETE /:id ends that session only', async () => {
       const user = await makeUser('one');
       const current = await openSession(user.id);
-      const target = await openSession(user.id);
+      // Active a day ago: inside the idle window, so still live (checks the raw SQL date comparison).
+      const target = await openSession(user.id, { lastActiveAt: new Date(Date.now() - DAY) });
       await del(current.cookie, `/${target.id}`).expect(204);
       const res = await me(target.cookie).expect(401);
       expect(res.body.error.code).toBe('SESSION_ENDED');
       await me(current.cookie).expect(200);
       const row = await prisma.userSession.findUniqueOrThrow({ where: { id: target.id } });
       expect(row.endReason).toBe('signed_out_by_user');
+      expect(await audits(user.id)).toEqual([['session_signed_out', { sessionId: target.id }]]);
     });
 
     it('DELETE /:id with the own session is 400 CURRENT_SESSION', async () => {
@@ -248,6 +308,7 @@ describe('Change password and active sessions (e2e)', () => {
       const current = await openSession(user.id);
       const res = await del(current.cookie, `/${current.id}`).expect(400);
       expect(res.body.error.code).toBe('CURRENT_SESSION');
+      expect(await audits(user.id)).toEqual([]);
     });
 
     it("DELETE /:id is 404 for another user's, an ended, an idle or an unknown session", async () => {
@@ -262,6 +323,7 @@ describe('Change password and active sessions (e2e)', () => {
         expect(res.body.error.code).toBe('SESSION_NOT_FOUND');
       }
       await me(theirs.cookie).expect(200);
+      expect(await audits(user.id)).toEqual([]);
     });
 
     it('DELETE /:id with a non-UUID is 400 VALIDATION_FAILED', async () => {
@@ -280,7 +342,9 @@ describe('Change password and active sessions (e2e)', () => {
       await me(b.cookie).expect(401);
       await me(c.cookie).expect(401);
       await me(current.cookie).expect(200);
+      expect(await audits(user.id)).toEqual([['other_sessions_signed_out', {}]]);
       await del(current.cookie, '').expect(204);
+      expect(await audits(user.id)).toHaveLength(1); // nothing ended the second time, so no row
     });
 
     it('DELETE routes: 401 without a session, 403 without CSRF', async () => {
