@@ -11,6 +11,8 @@ export interface EmailRecipient {
   email: string;
 }
 
+const oneLine = (text: string, max: number) => text.replace(/\s+/g, ' ').trim().slice(0, max);
+
 /** Sends email after the response (a wait would reveal through timing who gets a code). Never throws. */
 @Injectable()
 export class EmailService {
@@ -40,6 +42,18 @@ export class EmailService {
       to,
       'Sign in to AGI Board with Google',
       `Someone asked to reset the password for this email. Your account uses Google sign-in and has no password.\n\nUse Continue with Google at ${this.appOrigin()}/sign-in. If you did not ask for it, ignore this email.`,
+    );
+  }
+
+  /** Invites are matched by email at sign-in, so the link carries no token (specs/21 research R7). */
+  sendWorkspaceInvite(to: EmailRecipient, inviterName: string, workspaceName: string) {
+    // User-written names go out from our sender: one line each, bounded, so they cannot inject paragraphs.
+    inviterName = oneLine(inviterName, 100);
+    workspaceName = oneLine(workspaceName, 100);
+    this.send(
+      to,
+      `${inviterName} invited you to ${workspaceName} on AGI Board`,
+      `${inviterName} invited you to join the workspace "${workspaceName}" on AGI Board.\n\nSign in or sign up with this email address at ${this.appOrigin()}/ and accept the invite on your Home page. It is valid for 14 days.\n\nIf you did not expect it, ignore this email.`,
     );
   }
 

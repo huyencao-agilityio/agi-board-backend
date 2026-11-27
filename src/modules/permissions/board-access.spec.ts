@@ -1,4 +1,4 @@
-import { BoardAccessFacts, canCreateBoard, canViewBoard } from './board-access';
+import { BoardAccessFacts, canCreateBoard, canManageWorkspaceInvites, canViewBoard } from './board-access';
 
 // Add one row per rule as features land; keep the table the readable spec of who can do what.
 describe('canViewBoard', () => {
@@ -34,5 +34,17 @@ describe('canCreateBoard', () => {
 
   it.each(cases)('%s', (_, facts, expected) => {
     expect(canCreateBoard(facts)).toBe(expected);
+  });
+});
+
+describe('canManageWorkspaceInvites', () => {
+  const cases: [string, Pick<BoardAccessFacts, 'workspaceRole'>, boolean][] = [
+    ['workspace admin', { workspaceRole: 'admin' }, true],
+    ['workspace member', { workspaceRole: 'member' }, false],
+    ['board-only member or outsider', { workspaceRole: null }, false],
+  ];
+
+  it.each(cases)('%s', (_, facts, expected) => {
+    expect(canManageWorkspaceInvites(facts)).toBe(expected);
   });
 });

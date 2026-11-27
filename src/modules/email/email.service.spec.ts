@@ -61,6 +61,29 @@ describe('EmailService', () => {
     expect(Text).not.toContain('token');
   });
 
+  it('sends the workspace invite with inviter, workspace and app link', async () => {
+    service({ APP_ORIGIN: 'https://app.example.com' }).sendWorkspaceInvite(to, 'Ada Admin', 'Marketing');
+    await Promise.all(tasks);
+    const { To, Subject, Text } = sent().body as { To: unknown; Subject: string; Text: string };
+    expect(To).toEqual([{ Email: to.email }]);
+    expect(Subject).toContain('Ada Admin');
+    expect(Text).toContain('Ada Admin');
+    expect(Text).toContain('"Marketing"');
+    expect(Text).toContain('https://app.example.com/');
+    expect(Text).not.toContain('token');
+  });
+
+  it('puts user-written names in the invite email on one bounded line', async () => {
+    const evil = `IT Security\r\n\nVerify now: https://evil.example\u2028${'x'.repeat(200)}`;
+    service({ APP_ORIGIN: 'https://app.example.com' }).sendWorkspaceInvite(to, evil, 'W\nX');
+    await Promise.all(tasks);
+    const { Subject, Text } = sent().body as { Subject: string; Text: string };
+    expect(Subject).not.toMatch(/[\r\n\u2028]/);
+    expect(Text.split('\n')[0]).toContain('IT Security Verify now: https://evil.example');
+    expect(Text.split('\n')[0]).toContain('"W X"');
+    expect(Text.split('\n')[0].length).toBeLessThan(200);
+  });
+
   it('logs neither the address nor the reset token when sending fails', async () => {
     fetchMock.mockRejectedValue(new TypeError(`cannot reach ${to.email}`));
     service({ APP_ORIGIN: 'https://app.example.com' }).sendResetLink(to, 'secret-token');
