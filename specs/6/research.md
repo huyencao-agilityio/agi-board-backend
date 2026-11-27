@@ -87,7 +87,9 @@ Decisions taken while planning. Clarifications Q1–Q5 in `spec.md` are inputs, 
     2. Workspace invite: `INSERT INTO workspace_members … SELECT … WHERE <accepted guard> ON CONFLICT (workspace_id, user_id) DO NOTHING`
        with the invite's role. Existing board memberships are kept (BRD §3: board-only member becomes workspace member, keeps board roles).
        Then, BRD §3 default: other **non-expired** pending board invites for the same email in that workspace are accepted
-       too — insert their `board_members` rows (`ON CONFLICT DO NOTHING`), then mark those invites accepted.
+       too — for each, first mark the invite accepted (guarded by the main invite and `status='pending'`), then insert
+       its `board_members` row guarded on **that board invite** being accepted by this request (`ON CONFLICT DO NOTHING`),
+       so a concurrent decline/revoke of the board invite wins.
     3. Board invite: `INSERT INTO board_members … SELECT … WHERE <accepted guard> ON CONFLICT (board_id, user_id) DO NOTHING` with the invite's role.
   - `<accepted guard>` = `EXISTS (SELECT 1 FROM invites WHERE id=? AND status='accepted' AND responded_by_id=? AND responded_at=?now)`,
     stable across statements (unlike `changes()`, which only sees the previous statement).
