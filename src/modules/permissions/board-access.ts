@@ -24,6 +24,11 @@ export function canCreateBoard({ workspaceRole }: Pick<BoardAccessFacts, 'worksp
   return workspaceRole === 'admin';
 }
 
+/** Only workspace admins send, list, resend and revoke workspace invites (spec #21 Clarifications Q4). */
+export function canManageWorkspaceInvites({ workspaceRole }: Pick<BoardAccessFacts, 'workspaceRole'>): boolean {
+  return workspaceRole === 'admin';
+}
+
 /**
  * `canViewBoard` as a query filter, so lists never load hidden rows. Also hides closed boards and boards of archived
  * workspaces (specs/6 Q3). Keep the OR branches in step with `canViewBoard`.
