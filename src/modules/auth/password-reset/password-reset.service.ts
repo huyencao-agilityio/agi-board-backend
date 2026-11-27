@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { getBindings, runInBackground } from '../../../cloudflare';
+import { auditStatement, sqlDate } from '../../../common/audit-log';
 import { hashSessionToken, newSessionToken } from '../../../common/session-token';
 import { isUniqueConflict } from '../../../database/prisma-errors';
 import { PrismaService } from '../../../database/prisma.service';
@@ -20,9 +21,6 @@ const linkInvalid = () =>
     code: 'RESET_LINK_INVALID',
     message: 'This link has expired or was already used.',
   });
-
-/** Raw SQL bypasses Prisma, which stores dates in this form. */
-const sqlDate = (date: Date) => date.toISOString().replace('Z', '+00:00');
 
 /** Parameters: ?1 the link id, ?2 now. */
 const LINK_IS_VALID = `EXISTS (
@@ -148,6 +146,7 @@ export class PasswordResetService {
         lock.scope,
         lock.subjectKey,
       ),
+      auditStatement(DB, { action: 'password_reset_completed', userId: user.id, now }, LINK_IS_VALID, [linkId, now]),
       DB.prepare(
         `UPDATE password_reset_tokens SET used_at = ?2, updated_at = ?2 WHERE id = ?1 AND ${LINK_IS_VALID}`,
       ).bind(linkId, now),

@@ -1,6 +1,7 @@
 import { BadRequestException, HttpException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { getBindings } from '../../../cloudflare';
+import { auditStatement, sqlDate } from '../../../common/audit-log';
 import type { SessionUser } from '../../../common/guards/session.guard';
 import { DAY_MS } from '../../../common/session-cookie';
 import type { Env } from '../../../config/env';
@@ -25,9 +26,6 @@ const currentPasswordIncorrect = () =>
 
 /** One more entry in the new-password rule list, only for change password (the others are in password-rules.ts). */
 export const SAME_AS_CURRENT = 'password must differ from the current password';
-
-/** Raw SQL bypasses Prisma, which stores dates in this form. */
-const sqlDate = (date: Date) => date.toISOString().replace('Z', '+00:00');
 
 /** Password change and active sessions of the signed-in user (specs/22 research D6–D8). */
 @Injectable()
@@ -88,6 +86,7 @@ export class AccountSecurityService {
         `UPDATE password_reset_tokens SET voided_at = ?2, updated_at = ?2
          WHERE user_id = ?3 AND used_at IS NULL AND voided_at IS NULL AND ${newHashInPlace}`,
       ).bind(newHash, now, user.id),
+      auditStatement(DB, { action: 'password_changed', userId: user.id, now }, newHashInPlace, [newHash, now, user.id]),
     ]);
     // The password was replaced meanwhile (a reset or another change): the verified one is no longer current.
     if (updated.meta.changes !== 1) throw currentPasswordIncorrect();
@@ -113,18 +112,38 @@ export class AccountSecurityService {
     if (sessionId === user.sessionId) {
       throw new BadRequestException({ code: 'CURRENT_SESSION', message: 'Use log out to end this session.' });
     }
-    const now = new Date();
-    const { count } = await this.prisma.userSession.updateMany({
-      where: { id: sessionId, userId: user.id, endedAt: null, lastActiveAt: { gt: this.liveSince(now) } },
-      data: { endedAt: now, endReason: 'signed_out_by_user' },
-    });
-    if (count === 0) throw new NotFoundException({ code: 'SESSION_NOT_FOUND', message: 'Session not found.' });
+    const { DB } = getBindings();
+    const at = new Date();
+    const now = sqlDate(at);
+    // The audit row is written only if the update ended the session (same batch, so atomic). It must stay directly
+    // after the update: changes() reads the previous statement.
+    const [ended] = await DB.batch([
+      DB.prepare(
+        `UPDATE user_sessions SET ended_at = ?1, end_reason = 'signed_out_by_user', updated_at = ?1
+         WHERE id = ?2 AND user_id = ?3 AND ended_at IS NULL AND last_active_at > ?4`,
+      ).bind(now, sessionId, user.id, sqlDate(this.liveSince(at))),
+      auditStatement(
+        DB,
+        { action: 'session_signed_out', userId: user.id, now, data: { sessionId } },
+        'changes() > 0',
+        [],
+      ),
+    ]);
+    if (ended.meta.changes === 0) {
+      throw new NotFoundException({ code: 'SESSION_NOT_FOUND', message: 'Session not found.' });
+    }
   }
 
   async endOtherSessions(user: SessionUser): Promise<void> {
-    await this.prisma.userSession.updateMany({
-      where: { userId: user.id, endedAt: null, id: { not: user.sessionId } },
-      data: { endedAt: new Date(), endReason: 'signed_out_by_user' },
-    });
+    const { DB } = getBindings();
+    const now = sqlDate(new Date());
+    // As in endSession: the audit row must stay directly after the update (changes() reads the previous statement).
+    await DB.batch([
+      DB.prepare(
+        `UPDATE user_sessions SET ended_at = ?1, end_reason = 'signed_out_by_user', updated_at = ?1
+         WHERE user_id = ?2 AND ended_at IS NULL AND id <> ?3`,
+      ).bind(now, user.id, user.sessionId),
+      auditStatement(DB, { action: 'other_sessions_signed_out', userId: user.id, now }, 'changes() > 0', []),
+    ]);
   }
 }

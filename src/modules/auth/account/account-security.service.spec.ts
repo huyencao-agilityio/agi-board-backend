@@ -10,10 +10,15 @@ import { AccountSecurityService, SAME_AS_CURRENT } from './account-security.serv
 const user: SessionUser = { id: 'u1', email: 'jane@example.com', fullName: 'J', systemRole: 'user', sessionId: 's1' };
 const dto = { currentPassword: 'old-pass1', newPassword: 'new-pass2' };
 
+/** What the mocked `prepare(sql).bind(...args)` returns, so tests can read both. */
+interface Stmt {
+  sql: string;
+  args: unknown[];
+}
+
 describe('AccountSecurityService', () => {
   const findUniqueOrThrow = jest.fn();
   const findMany = jest.fn();
-  const updateMany = jest.fn();
   const passwords = { verify: jest.fn(), hash: jest.fn() };
   const throttle = { attempt: jest.fn(), recordFailure: jest.fn(), reset: jest.fn() };
   const batch = jest.fn();
@@ -26,10 +31,10 @@ describe('AccountSecurityService', () => {
     passwords.verify.mockResolvedValue(true);
     passwords.hash.mockResolvedValue('new-hash');
     batch.mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 2 } }, { meta: { changes: 1 } }]);
-    const prepare = () => ({ bind: (...args: unknown[]) => args });
+    const prepare = (sql: string) => ({ bind: (...args: unknown[]): Stmt => ({ sql, args }) });
     setBindings({ DB: { batch, prepare } } as unknown as Bindings);
     service = new AccountSecurityService(
-      { user: { findUniqueOrThrow }, userSession: { findMany, updateMany } } as unknown as PrismaService,
+      { user: { findUniqueOrThrow }, userSession: { findMany } } as unknown as PrismaService,
       passwords as unknown as PasswordService,
       throttle as unknown as SignInThrottleService,
       { get: () => 30 } as unknown as ConfigService<Env, true>,
@@ -120,28 +125,32 @@ describe('AccountSecurityService', () => {
         status: 400,
         response: { code: 'CURRENT_SESSION' },
       });
-      expect(updateMany).not.toHaveBeenCalled();
+      expect(batch).not.toHaveBeenCalled();
     });
 
     it('endSession is 404 when no live session of this user matches', async () => {
-      updateMany.mockResolvedValue({ count: 0 });
+      batch.mockResolvedValue([{ meta: { changes: 0 } }, { meta: { changes: 0 } }]);
       await expect(service.endSession(user, 's9')).rejects.toMatchObject({
         status: 404,
         response: { code: 'SESSION_NOT_FOUND' },
       });
-      expect(updateMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: 's9', userId: 'u1', endedAt: null, lastActiveAt: { gt: expect.any(Date) as Date } },
-        }),
-      );
+      // The audit statement is always in the batch; its changes() guard is what writes no row here (e2e checks it).
+      const [[[update, audit]]] = batch.mock.calls as [[[Stmt, Stmt]]];
+      expect(update.args).toEqual([expect.any(String), 's9', 'u1', expect.any(String)]);
+      expect(update.sql).toContain('user_id = ?3 AND ended_at IS NULL AND last_active_at > ?4');
+      expect(audit.sql).toContain('changes() > 0');
+      expect(audit.args).toContain('session_signed_out');
+      expect(audit.args).toContain(JSON.stringify({ sessionId: 's9' }));
     });
 
     it('endOtherSessions keeps the current session', async () => {
-      updateMany.mockResolvedValue({ count: 2 });
+      batch.mockResolvedValue([{ meta: { changes: 2 } }, { meta: { changes: 1 } }]);
       await service.endOtherSessions(user);
-      expect(updateMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { userId: 'u1', endedAt: null, id: { not: 's1' } } }),
-      );
+      const [[[update, audit]]] = batch.mock.calls as [[[Stmt, Stmt]]];
+      expect(update.args).toEqual([expect.any(String), 'u1', 's1']);
+      expect(update.sql).toContain('id <> ?3');
+      expect(audit.sql).toContain('changes() > 0');
+      expect(audit.args).toContain('other_sessions_signed_out');
     });
   });
 });
