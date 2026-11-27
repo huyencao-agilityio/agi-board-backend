@@ -10,8 +10,12 @@ import { SessionGuard } from './common/guards/session.guard';
 import { Env, validateEnv } from './config/env';
 import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { BoardsModule } from './modules/boards/boards.module';
 import { HealthModule } from './modules/health/health.module';
+import { HomeModule } from './modules/home/home.module';
+import { InvitesModule } from './modules/invites/invites.module';
 import { UsersModule } from './modules/users/users.module';
+import { WorkspacesModule } from './modules/workspaces/workspaces.module';
 
 @Module({
   imports: [
@@ -35,6 +39,10 @@ import { UsersModule } from './modules/users/users.module';
     AuthModule,
     HealthModule,
     UsersModule,
+    HomeModule,
+    WorkspacesModule,
+    BoardsModule,
+    InvitesModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

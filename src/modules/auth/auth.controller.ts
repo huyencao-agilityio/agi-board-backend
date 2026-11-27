@@ -1,19 +1,8 @@
-import {
-  BadRequestException,
-  Body,
-  Controller,
-  Delete,
-  Get,
-  HttpCode,
-  Param,
-  ParseUUIDPipe,
-  Post,
-  Req,
-  Res,
-} from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Post, Req, Res } from '@nestjs/common';
 import { ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { uuidParam } from '../../common/pipes/uuid-param.pipe';
 import { Public } from '../../common/decorators/public.decorator';
 import type { SessionUser } from '../../common/guards/session.guard';
 import { AccountSecurityService } from './account/account-security.service';
@@ -30,10 +19,7 @@ import { SessionService } from './session/session.service';
 import { SignInService } from './sign-in/sign-in.service';
 import { SignUpService } from './sign-up/sign-up.service';
 
-/** A list of messages, so the filter answers VALIDATION_FAILED like the ValidationPipe does. */
-const sessionIdPipe = new ParseUUIDPipe({
-  exceptionFactory: () => new BadRequestException(['sessionId must be a UUID']),
-});
+const sessionIdPipe = uuidParam('sessionId');
 
 @ApiTags('auth')
 @Controller('auth')

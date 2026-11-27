@@ -1,3 +1,4 @@
+import type { Prisma } from '../../generated/prisma/client';
 import type { BoardVisibility, MemberRole } from '../../generated/prisma/enums';
 
 /**
@@ -16,4 +17,38 @@ export interface BoardAccessFacts {
 export function canViewBoard({ workspaceRole, boardRole, visibility }: BoardAccessFacts): boolean {
   if (workspaceRole === 'admin' || boardRole !== null) return true;
   return workspaceRole === 'member' && visibility === 'workspace';
+}
+
+/**
+ * `canViewBoard` as a query filter, so lists never load hidden rows. Also hides closed boards and boards of archived
+ * workspaces (specs/6 Q3). Keep the OR branches in step with `canViewBoard`.
+ */
+export function visibleBoardWhere(userId: string): Prisma.BoardWhereInput {
+  return {
+    closedAt: null,
+    workspace: { archivedAt: null },
+    OR: [
+      { boardMembers: { some: { userId } } },
+      { workspace: { workspaceMembers: { some: { userId, role: 'admin' } } } },
+      { visibility: 'workspace', workspace: { workspaceMembers: { some: { userId } } } },
+    ],
+  };
+}
+
+/** Workspaces a user may see: not archived, and a workspace member or able to see one of its boards (BRD §2, §4). */
+export function visibleWorkspaceWhere(userId: string): Prisma.WorkspaceWhereInput {
+  return {
+    archivedAt: null,
+    OR: [{ workspaceMembers: { some: { userId } } }, { boards: { some: visibleBoardWhere(userId) } }],
+  };
+}
+
+/** Invites a user may see and answer: pending, sent to their email, in an active workspace and on an open board. */
+export function visibleInviteWhere(email: string): Prisma.InviteWhereInput {
+  return {
+    email,
+    status: 'pending',
+    workspace: { archivedAt: null },
+    OR: [{ boardId: null }, { board: { closedAt: null } }],
+  };
 }
