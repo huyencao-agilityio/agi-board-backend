@@ -1,12 +1,13 @@
 import { getBindings } from '../src/cloudflare';
 
 /**
- * Prisma cannot express these objects; they are hand-written in the init migration.
+ * Prisma cannot express these objects; they are hand-written in the migrations (`-- manual`).
  * This test fails if a later migration drops one of them (see prisma/schema/schema.prisma).
  */
 const MANUAL_CHECKS = [
   'activities_check',
   'attachments_size_bytes_check',
+  'boards_background_color_check',
   'boards_check',
   'boards_name_check',
   'card_links_check',

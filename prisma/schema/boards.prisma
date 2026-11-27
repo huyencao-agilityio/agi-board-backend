@@ -7,6 +7,8 @@ model Board {
   visibility          BoardVisibility  @default(workspace)
   backgroundKey       String?          @map("background_key")
   backgroundObjectKey String?          @map("background_object_key")
+  /// One of the 10 preset colors (CHECK in migration 0002); random per board, shown when no image is set.
+  backgroundColor     String           @default("#0d9488") @map("background_color")
   nextCardNumber      Int              @default(1) @map("next_card_number")
   closedAt            DateTime?        @map("closed_at")
   closedById          String?          @map("closed_by_id")
