@@ -241,14 +241,38 @@ describe('Home, workspaces, boards and invites (e2e)', () => {
       expect((res.body as WorkspaceTile).name).toBe(name);
     });
 
-    it.each([[{ name: '   ' }], [{}], [{ name: 'Ok', extra: 1 }], [{ name: 5 }], [{ name: 'n'.repeat(101) }]])(
-      '400 VALIDATION_FAILED for %j',
-      async (body) => {
-        const me = await signedIn();
-        const res = await write('post', me, '/workspaces').send(body).expect(400);
-        expect((res.body as { error: { code: string } }).error.code).toBe('VALIDATION_FAILED');
-      },
-    );
+    it('turns line breaks into spaces before storing', async () => {
+      const me = await signedIn();
+      const res = await write('post', me, '/workspaces')
+        .send({ name: ' Team\r\nAlpha\n\nBeta\u2028Gamma ' })
+        .expect(201);
+      const body = res.body as WorkspaceTile;
+      expect(body.name).toBe('Team Alpha Beta Gamma');
+      const audit = await prisma.auditLogEntry.findFirst({ where: { workspaceId: body.id } });
+      expect(audit?.targetLabel).toBe('Team Alpha Beta Gamma');
+    });
+
+    it('allows two workspaces with the same name', async () => {
+      const me = await signedIn();
+      const first = (await write('post', me, '/workspaces').send({ name: 'Team' }).expect(201)).body as WorkspaceTile;
+      const second = (await write('post', me, '/workspaces').send({ name: 'Team' }).expect(201)).body as WorkspaceTile;
+      expect(first.id).not.toBe(second.id);
+      expect((await home(me)).workspaces.map((w) => w.id)).toEqual(expect.arrayContaining([first.id, second.id]));
+    });
+
+    it.each([
+      [{ name: '   ' }],
+      [{ name: '\n\n' }],
+      [{ name: '\r\n \n' }],
+      [{}],
+      [{ name: 'Ok', extra: 1 }],
+      [{ name: 5 }],
+      [{ name: 'n'.repeat(101) }],
+    ])('400 VALIDATION_FAILED for %j', async (body) => {
+      const me = await signedIn();
+      const res = await write('post', me, '/workspaces').send(body).expect(400);
+      expect((res.body as { error: { code: string } }).error.code).toBe('VALIDATION_FAILED');
+    });
 
     it('403 CSRF_INVALID without the CSRF header', async () => {
       const me = await signedIn();
