@@ -13,4 +13,9 @@ export default function globalSetup() {
     stdio: 'inherit',
     env: { ...process.env, CI: 'true' },
   });
+  // Catalog rows (label colors, preset backgrounds) that new boards reference; idempotent like on deploy.
+  execSync(`pnpm -s wrangler d1 execute DB --local --persist-to ${E2E_STATE_DIR} --file prisma/seed.sql`, {
+    stdio: 'inherit',
+    env: { ...process.env, CI: 'true' },
+  });
 }

@@ -19,6 +19,11 @@ export function canViewBoard({ workspaceRole, boardRole, visibility }: BoardAcce
   return workspaceRole === 'member' && visibility === 'workspace';
 }
 
+/** Only the admin of a workspace can create boards in it (BRD §2). */
+export function canCreateBoard({ workspaceRole }: Pick<BoardAccessFacts, 'workspaceRole'>): boolean {
+  return workspaceRole === 'admin';
+}
+
 /**
  * `canViewBoard` as a query filter, so lists never load hidden rows. Also hides closed boards and boards of archived
  * workspaces (specs/6 Q3). Keep the OR branches in step with `canViewBoard`.

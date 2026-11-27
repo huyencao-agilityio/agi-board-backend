@@ -7,6 +7,7 @@ import { setupApp } from '../src/app.setup';
 import { getBindings } from '../src/cloudflare';
 import { hashSessionToken, newSessionToken } from '../src/common/session-token';
 import { PrismaService } from '../src/database/prisma.service';
+import { BOARD_COLORS } from '../src/modules/boards/board-colors';
 import type { BoardVisibility, MemberRole } from '../src/generated/prisma/enums';
 
 const DOMAIN = '@home.e2e.test';
@@ -524,6 +525,170 @@ describe('Home, workspaces, boards and invites (e2e)', () => {
       ]);
       expect(results.map((r) => r.status).sort()).toEqual([200, 404]);
       expect(await prisma.workspaceMember.count({ where: { workspaceId: w.id, userId: me.id } })).toBe(1);
+    });
+  });
+
+  describe('create board', () => {
+    const boardsPath = (workspaceId: string) => `/workspaces/${workspaceId}/boards`;
+    const codeOf = (res: request.Response) => (res.body as { error: { code: string } }).error.code;
+    const boardNames = async (u: TestUser) => (await home(u)).workspaces.flatMap((w) => w.boards.map((b) => b.name));
+
+    it('creates an empty board with the creator as admin, 6 default labels and a board_created activity', async () => {
+      const admin = await signedIn();
+      const w = await makeWorkspace(admin, 'Marketing');
+      const res = await write('post', admin, boardsPath(w.id)).send({ name: '  Roadmap  ' }).expect(201);
+      const body = res.body as Tile & { workspaceId: string; workspaceName: string; visibility: string };
+      expect(body).toEqual({
+        id: expect.stringMatching(/^[0-9a-f-]{36}$/) as string,
+        name: 'Roadmap',
+        workspaceId: w.id,
+        workspaceName: 'Marketing',
+        visibility: 'workspace',
+        backgroundKey: null,
+        backgroundThumbnailUrl: null,
+        backgroundColor: expect.any(String) as string,
+        starred: false,
+      });
+      expect(BOARD_COLORS).toContain(body.backgroundColor);
+      const board = await prisma.board.findUniqueOrThrow({ where: { id: body.id }, select: { createdById: true } });
+      expect(board.createdById).toBe(admin.id);
+      const members = await prisma.boardMember.findMany({ where: { boardId: body.id } });
+      expect(members).toEqual([expect.objectContaining({ userId: admin.id, role: 'admin' })]);
+      const labels = await prisma.label.findMany({
+        where: { boardId: body.id },
+        select: { name: true, colorKey: true },
+      });
+      expect(labels.every((l) => l.name === '')).toBe(true);
+      expect(labels.map((l) => l.colorKey).sort()).toEqual(['blue', 'green', 'orange', 'purple', 'red', 'yellow']);
+      const activities = await prisma.activity.findMany({ where: { boardId: body.id } });
+      expect(activities).toEqual([expect.objectContaining({ type: 'board_created', cardId: null, actorId: admin.id })]);
+      expect(await prisma.list.count({ where: { boardId: body.id } })).toBe(0);
+    });
+
+    it('accepts a 512-character name (after trim)', async () => {
+      const admin = await signedIn();
+      const w = await makeWorkspace(admin);
+      const name = 'n'.repeat(512);
+      const res = await write('post', admin, boardsPath(w.id))
+        .send({ name: `  ${name}  ` })
+        .expect(201);
+      expect((res.body as Tile).name).toBe(name);
+    });
+
+    it('allows two boards with the same name', async () => {
+      const admin = await signedIn();
+      const w = await makeWorkspace(admin);
+      const a = await write('post', admin, boardsPath(w.id)).send({ name: 'Same' }).expect(201);
+      const b = await write('post', admin, boardsPath(w.id)).send({ name: 'Same' }).expect(201);
+      expect((a.body as Tile).id).not.toBe((b.body as Tile).id);
+    });
+
+    it('shows the new board on GET /workspaces/:id', async () => {
+      const admin = await signedIn();
+      const w = await makeWorkspace(admin);
+      const res = await write('post', admin, boardsPath(w.id)).send({ name: 'Roadmap' }).expect(201);
+      const tile = (await get(admin, `/workspaces/${w.id}`).expect(200)).body as WorkspaceTile;
+      expect(tile.boards.map((b) => b.id)).toEqual([(res.body as Tile).id]);
+    });
+
+    it.each([
+      [{}],
+      [{ name: '' }],
+      [{ name: '   ' }],
+      [{ name: 42 }],
+      [{ name: 'n'.repeat(513) }],
+      [{ name: 'B', visibility: 'public' }],
+      [{ name: 'B', workspaceId: 'x' }],
+    ])('400 VALIDATION_FAILED for %j', async (payload) => {
+      const admin = await signedIn();
+      const w = await makeWorkspace(admin);
+      expect(codeOf(await write('post', admin, boardsPath(w.id)).send(payload).expect(400))).toBe('VALIDATION_FAILED');
+    });
+
+    it('400 VALIDATION_FAILED for a workspace id that is not a UUID', async () => {
+      const admin = await signedIn();
+      const res = await write('post', admin, boardsPath('not-a-uuid')).send({ name: 'B' }).expect(400);
+      expect(codeOf(res)).toBe('VALIDATION_FAILED');
+    });
+
+    it('403 BOARD_CREATE_FORBIDDEN for a workspace member and a board-only member', async () => {
+      const admin = await signedIn();
+      const member = await signedIn();
+      const guest = await signedIn();
+      const w = await makeWorkspace(admin);
+      await addWorkspaceMember(w.id, member);
+      await addBoardMember((await makeBoard(w.id, admin)).id, guest);
+      for (const u of [member, guest]) {
+        const res = await write('post', u, boardsPath(w.id)).send({ name: 'Nope' }).expect(403);
+        expect(codeOf(res)).toBe('BOARD_CREATE_FORBIDDEN');
+      }
+      expect(await prisma.board.count({ where: { workspaceId: w.id } })).toBe(1);
+    });
+
+    it('404 WORKSPACE_NOT_FOUND for an outsider, an archived workspace and an unknown id', async () => {
+      const admin = await signedIn();
+      const outsider = await signedIn();
+      const w = await makeWorkspace(admin);
+      const archived = await makeWorkspace(admin, 'A', { archived: true });
+      const cases: [TestUser, string][] = [
+        [outsider, w.id],
+        [admin, archived.id],
+        [admin, UNKNOWN_ID],
+      ];
+      for (const [u, id] of cases) {
+        const res = await write('post', u, boardsPath(id)).send({ name: 'Nope' }).expect(404);
+        expect(codeOf(res)).toBe('WORKSPACE_NOT_FOUND');
+      }
+      expect(await prisma.board.count({ where: { workspaceId: { in: [w.id, archived.id] } } })).toBe(0);
+    });
+
+    it('401 without a session; 403 CSRF_INVALID without the CSRF header', async () => {
+      const admin = await signedIn();
+      const w = await makeWorkspace(admin);
+      await request(app.getHttpServer())
+        .post(`/api/v1${boardsPath(w.id)}`)
+        .set('Cookie', csrfCookie)
+        .set('X-CSRF-Token', csrf)
+        .send({ name: 'B' })
+        .expect(401);
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1${boardsPath(w.id)}`)
+        .set('Cookie', [csrfCookie, admin.cookie])
+        .send({ name: 'B' })
+        .expect(403);
+      expect(codeOf(res)).toBe('CSRF_INVALID');
+    });
+
+    it('a private board is visible only to its creator and workspace admins', async () => {
+      const admin = await signedIn();
+      const admin2 = await signedIn();
+      const member = await signedIn();
+      const w = await makeWorkspace(admin);
+      await addWorkspaceMember(w.id, admin2, 'admin');
+      await addWorkspaceMember(w.id, member);
+      const res = await write('post', admin, boardsPath(w.id))
+        .send({ name: 'Secret', visibility: 'private' })
+        .expect(201);
+      const board = res.body as Tile & { visibility: string };
+      expect(board.visibility).toBe('private');
+      expect(await boardNames(admin)).toContain('Secret');
+      expect(await boardNames(admin2)).toContain('Secret');
+      expect(await boardNames(member)).not.toContain('Secret');
+      const members = await prisma.boardMember.findMany({ where: { boardId: board.id }, select: { userId: true } });
+      expect(members).toEqual([{ userId: admin.id }]);
+    });
+
+    it('a workspace board is visible to every workspace member without a board_members row', async () => {
+      const admin = await signedIn();
+      const member = await signedIn();
+      const w = await makeWorkspace(admin);
+      await addWorkspaceMember(w.id, member);
+      const res = await write('post', admin, boardsPath(w.id))
+        .send({ name: 'Open', visibility: 'workspace' })
+        .expect(201);
+      expect(await boardNames(member)).toContain('Open');
+      const boardId = (res.body as Tile).id;
+      expect(await prisma.boardMember.count({ where: { boardId, userId: member.id } })).toBe(0);
     });
   });
 
